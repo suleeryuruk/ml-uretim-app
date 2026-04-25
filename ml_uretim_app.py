@@ -180,7 +180,8 @@ with st.spinner("Modeller hazırlanıyor..."):
     (r_mdl, r_sc, r_feat, Xtr_r, Xte_r, ytr_r, yte_r_lst,
      r_met, r_imp) = reg_egit()
  
-    veri_hash = kaynak + str(len(st.session_state.get("ai4i_df") or []))
+    _ai4i_tmp = st.session_state.get("ai4i_df")
+    veri_hash = kaynak + str(len(_ai4i_tmp) if _ai4i_tmp is not None else 0)
     (c_mdl, c_sc, c_feat, Xtr_c, Xte_c, ytr_c, yte_c_lst,
      c_met) = clf_egit(veri_hash)
  
@@ -410,7 +411,7 @@ with t4:
  
     @st.cache_data(show_spinner=False)
     def k_clf(vh):
-        df = st.session_state.get("ai4i_df") or ai4i_sentetik()
+        df_tmp2 = st.session_state.get("ai4i_df"); df = df_tmp2 if df_tmp2 is not None else ai4i_sentetik()
         f = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                           "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
         X,y = df[f],df["machine_failure"]
@@ -436,7 +437,7 @@ with t4:
  
     @st.cache_data(show_spinner=False)
     def c_clf(vh):
-        df = st.session_state.get("ai4i_df") or ai4i_sentetik()
+        df_tmp2 = st.session_state.get("ai4i_df"); df = df_tmp2 if df_tmp2 is not None else ai4i_sentetik()
         f = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                           "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
         X,y = df[f],df["machine_failure"]

@@ -34,27 +34,58 @@ def sentetik_regression_verisi():
         "vardiya": vardiya, "toplam_maliyet": np.round(maliyet, 0)
     })
  
-@st.cache_data
-def ai4i_verisi_yukle():
+def _parse_ai4i(df):
+    """Sütun adlarını normalize et ve type_encoded ekle."""
+    df.columns = (df.columns.str.strip()
+                  .str.replace(r"[\[\]()]", "", regex=True)
+                  .str.replace(" ", "_").str.lower())
+    if "type" in df.columns:
+        le = LabelEncoder()
+        df["type_encoded"] = le.fit_transform(df["type"])
+    return df
+ 
+@st.cache_data(show_spinner=False)
+def ai4i_url_indir():
+    """UCI'dan AI4I 2020 verisini indir. Başarısız olursa None döner."""
+    try:
+        import requests
+        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00601/ai4i2020.csv"
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            from io import StringIO
+            df = pd.read_csv(StringIO(r.text))
+            return _parse_ai4i(df)
+    except Exception:
+        pass
+    return None
+ 
+def ai4i_verisi_yukle(yuklenen_bytes=None):
+    """Öncelik sırası: 1) yüklenen dosya  2) UCI URL  3) sentetik."""
+    # 1 — Kullanıcı dosya yüklediyse
+    if yuklenen_bytes is not None:
+        from io import BytesIO
+        df = pd.read_csv(BytesIO(yuklenen_bytes))
+        return _parse_ai4i(df), False
+ 
+    # 2 — Yerel dosya (geliştirme ortamı)
     if os.path.exists("ai4i2020.csv"):
-        df = pd.read_csv("ai4i2020.csv")
-        df.columns = (df.columns.str.strip()
-                      .str.replace(r"[\[\]()]","",regex=True)
-                      .str.replace(" ","_").str.lower())
-        if "type" in df.columns:
-            le = LabelEncoder()
-            df["type_encoded"] = le.fit_transform(df["type"])
+        return _parse_ai4i(pd.read_csv("ai4i2020.csv")), False
+ 
+    # 3 — UCI'dan otomatik indir
+    df = ai4i_url_indir()
+    if df is not None:
         return df, False
-    # Sentetik AI4I
+ 
+    # 4 — Sentetik fallback
     np.random.seed(42)
     n = 10000
-    tip  = np.random.choice(["L","M","H"], n, p=[0.5,0.3,0.2])
+    tip   = np.random.choice(["L","M","H"], n, p=[0.5,0.3,0.2])
     tip_e = np.where(tip=="L",0,np.where(tip=="M",1,2))
-    air  = np.random.normal(300,2,n)
-    proc = air + np.random.normal(10,1,n)
-    rpm  = np.random.normal(1538,179,n).clip(1168,2886)
-    tork = np.random.normal(40,10,n).clip(3.8,76.6)
-    wear = (tip_e*30 + np.random.uniform(0,200,n)).clip(0,250)
+    air   = np.random.normal(300,2,n)
+    proc  = air + np.random.normal(10,1,n)
+    rpm   = np.random.normal(1538,179,n).clip(1168,2886)
+    tork  = np.random.normal(40,10,n).clip(3.8,76.6)
+    wear  = (tip_e*30 + np.random.uniform(0,200,n)).clip(0,250)
     power = tork * rpm * 2 * np.pi / 60
     failure = ((power>9000) | (tork*(250-wear)>13000) |
                ((rpm<1380)&(tork>40)) | (np.random.rand(n)<0.001)).astype(int)
@@ -105,7 +136,7 @@ def regresyon_egit(df_json):
             feat_imp, col_names)
  
 @st.cache_data
-def siniflandirma_egit(df_json):
+def siniflandirma_egit(df_json, _kaynak=None):
     df = pd.read_json(df_json)
     cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                         "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
@@ -142,7 +173,11 @@ def siniflandirma_egit(df_json):
 # ── VERİ VE MODEL YÜKLEME ─────────────────────────────────────
 with st.spinner("Modeller eğitiliyor..."):
     reg_df = sentetik_regression_verisi()
-    ai4i_df, sentetik_mi = ai4i_verisi_yukle()
+ 
+    # AI4I — önce dosya yükleyici kontrol et
+    yuklenen_bytes = st.session_state.get("ai4i_bytes", None)
+    with st.spinner("AI4I 2020 verisi yükleniyor..."):
+        ai4i_df, sentetik_mi = ai4i_verisi_yukle(yuklenen_bytes)
  
     (r_met, Xtr_r_j, Xte_r_j, ytr_r_j, yte_r_j,
      dt_pred_r, knn_pred_r, svr_pred_r,
@@ -152,7 +187,7 @@ with st.spinner("Modeller eğitiliyor..."):
     (c_met, Xtr_c_j, Xte_c_j, ytr_c_j, yte_c_j,
      dt_pred_c, knn_pred_c, svc_pred_c,
      c_scaler_mean, c_scaler_scale,
-     clf_cols) = siniflandirma_egit(ai4i_df.to_json())
+     clf_cols) = siniflandirma_egit(ai4i_df.to_json(), sentetik_mi)
  
 # Numpy dizilerine çevir
 yte_r = np.array(pd.read_json(yte_r_j).squeeze())
@@ -181,8 +216,18 @@ def dt_reg_predict(vals):
 # ── BAŞLIK ────────────────────────────────────────────────────
 st.title("🏭 Üretim Zekâ Platformu")
 st.markdown("**Decision Tree · KNN · SVM** — Regresyon ve Sınıflandırma karşılaştırması")
-if sentetik_mi:
-    st.caption("ℹ️ AI4I sınıflandırma verisi demo modda (sentetik). Gerçek veri için ai4i2020.csv yükleyebilirsiniz.")
+ 
+if not sentetik_mi:
+    st.success("✅ AI4I 2020 gerçek verisi yüklendi — 10.000 gözlem, %3,4 arıza")
+else:
+    st.warning("⚠️ AI4I 2020 verisi otomatik indirilemedi. Lütfen aşağıdan yükleyin.")
+    with st.expander("📂 AI4I 2020 CSV Yükle", expanded=True):
+        st.markdown("Veriyi [UCI sayfasından](https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset) indirip yükleyebilirsiniz.")
+        uploaded = st.file_uploader("ai4i2020.csv dosyasını seçin", type=["csv"])
+        if uploaded:
+            st.session_state["ai4i_bytes"] = uploaded.read()
+            st.rerun()
+ 
 st.divider()
  
 # ── SEKMELER ─────────────────────────────────────────────────
@@ -334,8 +379,9 @@ with t2:
  
     with col_s:
         @st.cache_data
-        def predict_all_clf(air, proc, rpm, tork, wear, tip_e):
-            df, _ = ai4i_verisi_yukle()
+        def predict_all_clf(air, proc, rpm, tork, wear, tip_e, _kaynak=None):
+            yb = st.session_state.get("ai4i_bytes", None)
+            df, _ = ai4i_verisi_yukle(yb)
             cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                                 "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
             X = df[cols]; y = df["machine_failure"]
@@ -355,7 +401,7 @@ with t2:
             return res
  
         with st.spinner("Hesaplanıyor..."):
-            clf_res = predict_all_clf(c_air, c_proc, c_rpm, c_tork, c_wear, c_tip_e)
+            clf_res = predict_all_clf(c_air, c_proc, c_rpm, c_tork, c_wear, c_tip_e, _kaynak=sentetik_mi)
  
         aktif = clf_res[{"Decision Tree":"dt","KNN":"knn","SVM":"svc"}[model_c]]
  
@@ -475,8 +521,9 @@ with t4:
         return tr,te
  
     @st.cache_data
-    def k_opt_clf():
-        df,_ = ai4i_verisi_yukle()
+    def k_opt_clf(_kaynak=None):
+        yb = st.session_state.get("ai4i_bytes", None)
+        df,_ = ai4i_verisi_yukle(yb)
         cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                             "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
         X = df[cols]; y = df["machine_failure"]
@@ -507,8 +554,9 @@ with t4:
         return c_vals,tr,te
  
     @st.cache_data
-    def c_opt_clf():
-        df,_ = ai4i_verisi_yukle()
+    def c_opt_clf(_kaynak=None):
+        yb = st.session_state.get("ai4i_bytes", None)
+        df,_ = ai4i_verisi_yukle(yb)
         cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
                             "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
         X = df[cols]; y = df["machine_failure"]
@@ -526,7 +574,7 @@ with t4:
     if "KNN" in hp_sec:
         with st.spinner("K analizi hesaplanıyor..."):
             tr_r,te_r = k_opt_reg()
-            tr_c,te_c = k_opt_clf()
+            tr_c,te_c = k_opt_clf(_kaynak=sentetik_mi)
         h1c, h2c = st.columns(2)
         with h1c:
             best_k = int(np.argmax(te_r))+1
@@ -553,7 +601,7 @@ with t4:
     else:
         with st.spinner("C analizi hesaplanıyor..."):
             c_vals,tr_r,te_r = c_opt_reg()
-            c_vals,tr_c,te_c = c_opt_clf()
+            c_vals,tr_c,te_c = c_opt_clf(_kaynak=sentetik_mi)
         h1c, h2c = st.columns(2)
         c_labels = [str(c) for c in c_vals]
         with h1c:
@@ -644,3 +692,4 @@ Marjini belirleyen noktalara **Support Vectors** denir.
         "Kriter":  ["Yorumlanabilirlik şart","Gerçek zamanlı tahmin","Büyük veri (>100K)","Az veri","Doğrusal olmayan ilişki"],
         "Öneri":   ["🌳 Decision Tree","🌳 DT veya 🟣 SVM","🌳 DT veya 🟣 SVM","🟣 SVM","🟣 SVM (kernel) veya 🌳 DT"],
     }), hide_index=True, use_container_width=True)
+ 

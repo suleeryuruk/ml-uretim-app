@@ -1,20 +1,10 @@
-# ============================================================
-#   ÜRETİM ZEKÂ PLATFORMU — v2.0
-#   Decision Tree + KNN: Regression & Classification
-#
-#   KURULUM:
-#       pip install streamlit scikit-learn pandas numpy matplotlib seaborn
-#
-#   ÇALIŞTIRMA:
-#       streamlit run ml_uretim_app_knn.py
-# ============================================================
-
 import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tree, export_text
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, export_text
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+from sklearn.svm import SVR, SVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
                               accuracy_score, precision_score, recall_score,
@@ -22,673 +12,635 @@ from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import os, warnings
 warnings.filterwarnings("ignore")
-
-# ── Sayfa Ayarları ──────────────────────────────────────────
-st.set_page_config(
-    page_title="Üretim Zekâ Platformu v2",
-    page_icon="🏭",
-    layout="wide",
-)
-
-st.markdown("""
-<style>
-    [data-testid="stMetricValue"] { font-size: 1.4rem; font-weight: 800; }
-    .stTabs [data-baseweb="tab"] { font-size: 13px; font-weight: 600; }
-    .block-container { padding-top: 1.5rem; }
-</style>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# ── VERİ SETLERİ
-# ============================================================
-
+ 
+st.set_page_config(page_title="Üretim Zekâ Platformu", page_icon="🏭", layout="wide")
+ 
+# ── VERİ ÜRETİMİ ─────────────────────────────────────────────
 @st.cache_data
 def sentetik_regression_verisi():
     np.random.seed(42)
     n = 500
     uretim   = np.random.randint(50, 500, n)
     makine   = np.random.randint(1, 20, n)
-    iscilik  = np.random.uniform(4, 16, n)
-    hammadde = np.random.uniform(10, 80, n)
+    iscilik  = np.round(np.random.uniform(4, 16, n), 1)
+    hammadde = np.round(np.random.uniform(10, 80, n), 1)
     vardiya  = np.random.choice([1, 2], n)
-    maliyet  = (
-        uretim * hammadde * 0.9
-        + iscilik * 250
-        + makine * 150
-        + (vardiya == 2) * 1200
-        + np.random.normal(0, 800, n)
-    ).round(2)
+    gurultu  = np.random.normal(0, 500, n)
+    maliyet  = (uretim * hammadde * 0.9 + iscilik * 250 +
+                makine * 150 + (vardiya == 2) * 1200 + gurultu)
     return pd.DataFrame({
-        "uretim_miktari": uretim,
-        "makine_yasi": makine,
-        "iscilik_saati": iscilik.round(1),
-        "hammadde_fiyati": hammadde.round(2),
-        "vardiya": vardiya,
-        "toplam_maliyet": maliyet,
+        "uretim_miktari": uretim, "makine_yasi": makine,
+        "iscilik_saati": iscilik, "hammadde_fiyati": hammadde,
+        "vardiya": vardiya, "toplam_maliyet": np.round(maliyet, 0)
     })
-
-
+ 
 @st.cache_data
-def ai4i_verisi_yukle(yuklenen=None):
-    if yuklenen is not None:
-        df = pd.read_csv(yuklenen)
-    elif os.path.exists("ai4i2020.csv"):
+def ai4i_verisi_yukle():
+    if os.path.exists("ai4i2020.csv"):
         df = pd.read_csv("ai4i2020.csv")
-    else:
-        df = None
-
-    if df is not None:
         df.columns = (df.columns.str.strip()
-                      .str.replace(r"[\[\]()]", "", regex=True)
-                      .str.replace(" ", "_").str.lower())
+                      .str.replace(r"[\[\]()]","",regex=True)
+                      .str.replace(" ","_").str.lower())
         if "type" in df.columns:
             le = LabelEncoder()
             df["type_encoded"] = le.fit_transform(df["type"])
         return df, False
-
+    # Sentetik AI4I
     np.random.seed(42)
     n = 10000
-    tip   = np.random.choice(["L","M","H"], n, p=[0.5,0.3,0.2])
+    tip  = np.random.choice(["L","M","H"], n, p=[0.5,0.3,0.2])
     tip_e = np.where(tip=="L",0,np.where(tip=="M",1,2))
-    air   = np.random.normal(300, 2, n)
-    proc  = air + np.random.normal(10, 1, n)
-    rpm   = np.random.normal(1538, 179, n).clip(1168, 2886)
-    tork  = np.random.normal(40, 10, n).clip(3.8, 76.6)
-    wear  = (tip_e*30 + np.random.uniform(0,200,n)).clip(0,250)
+    air  = np.random.normal(300,2,n)
+    proc = air + np.random.normal(10,1,n)
+    rpm  = np.random.normal(1538,179,n).clip(1168,2886)
+    tork = np.random.normal(40,10,n).clip(3.8,76.6)
+    wear = (tip_e*30 + np.random.uniform(0,200,n)).clip(0,250)
     power = tork * rpm * 2 * np.pi / 60
-    failure = ((power > 9000) | (tork*(250-wear)>13000) |
+    failure = ((power>9000) | (tork*(250-wear)>13000) |
                ((rpm<1380)&(tork>40)) | (np.random.rand(n)<0.001)).astype(int)
-    df = pd.DataFrame({
-        "type": tip, "type_encoded": tip_e,
-        "air_temperature_k": air.round(1),
-        "process_temperature_k": proc.round(1),
-        "rotational_speed_rpm": rpm.round(0).astype(int),
-        "torque_nm": tork.round(1),
-        "tool_wear_min": wear.round(0).astype(int),
-        "machine_failure": failure,
-    })
-    return df, True
-
-
-# ============================================================
-# ── MODEL EĞİTİM FONKSİYONLARI
-# ============================================================
-
-@st.cache_resource
-def regression_modelleri_egit(df):
+    return pd.DataFrame({
+        "type":tip, "type_encoded":tip_e,
+        "air_temperature_k":air.round(1),
+        "process_temperature_k":proc.round(1),
+        "rotational_speed_rpm":rpm.round(0).astype(int),
+        "torque_nm":tork.round(1),
+        "tool_wear_min":wear.round(0).astype(int),
+        "machine_failure":failure
+    }), True
+ 
+# ── MODEL EĞİTİMİ ─────────────────────────────────────────────
+@st.cache_data
+def regresyon_egit(df_json):
+    df = pd.read_json(df_json)
     X = df[["uretim_miktari","makine_yasi","iscilik_saati","hammadde_fiyati","vardiya"]]
     y = df["toplam_maliyet"]
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # --- Decision Tree ---
-    dt = DecisionTreeRegressor(max_depth=5, random_state=42)
-    dt.fit(Xtr, ytr)
-    dt_pred = dt.predict(Xte)
-
-    # --- KNN (StandardScaler zorunlu!) ---
+ 
+    dt = DecisionTreeRegressor(max_depth=5, random_state=42).fit(Xtr, ytr)
+ 
     scaler = StandardScaler()
     Xtr_s = scaler.fit_transform(Xtr)
     Xte_s = scaler.transform(Xte)
-    knn = KNeighborsRegressor(n_neighbors=5)
-    knn.fit(Xtr_s, ytr)
+ 
+    knn = KNeighborsRegressor(n_neighbors=5).fit(Xtr_s, ytr)
+    svr = SVR(kernel="rbf", C=100, epsilon=0.1).fit(Xtr_s, ytr)
+ 
+    dt_pred  = dt.predict(Xte)
     knn_pred = knn.predict(Xte_s)
-
-    dt_met = {
-        "r2":   round(r2_score(yte, dt_pred), 4),
-        "mae":  round(mean_absolute_error(yte, dt_pred), 0),
-        "rmse": round(float(np.sqrt(mean_squared_error(yte, dt_pred))), 0),
-    }
-    knn_met = {
-        "r2":   round(r2_score(yte, knn_pred), 4),
-        "mae":  round(mean_absolute_error(yte, knn_pred), 0),
-        "rmse": round(float(np.sqrt(mean_squared_error(yte, knn_pred))), 0),
-    }
-    return dt, knn, scaler, Xtr, Xte, ytr, yte, dt_pred, knn_pred, dt_met, knn_met
-
-
-@st.cache_resource
-def classification_modelleri_egit(df):
-    ozellikler = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
-                               "rotational_speed_rpm","torque_nm","tool_wear_min"]
-                  if c in df.columns]
-    X = df[ozellikler]
+    svr_pred = svr.predict(Xte_s)
+ 
+    def met(pred):
+        return {"r2": round(r2_score(yte,pred),4),
+                "mae": round(mean_absolute_error(yte,pred),0),
+                "rmse": round(float(np.sqrt(mean_squared_error(yte,pred))),0)}
+ 
+    feat_imp = list(dt.feature_importances_)
+    col_names = list(Xtr.columns)
+ 
+    return ({"dt":met(dt_pred), "knn":met(knn_pred), "svr":met(svr_pred)},
+            Xtr.to_json(), Xte.to_json(),
+            ytr.to_json(), yte.to_json(),
+            list(dt_pred), list(knn_pred), list(svr_pred),
+            scaler.mean_.tolist(), scaler.scale_.tolist(),
+            feat_imp, col_names)
+ 
+@st.cache_data
+def siniflandirma_egit(df_json):
+    df = pd.read_json(df_json)
+    cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
+                        "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
+    X = df[cols]
     y = df["machine_failure"]
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # --- Decision Tree ---
-    dt = DecisionTreeClassifier(max_depth=5, random_state=42)
-    dt.fit(Xtr, ytr)
-    dt_pred = dt.predict(Xte)
-
-    # --- KNN ---
+ 
+    dt = DecisionTreeClassifier(max_depth=5, random_state=42).fit(Xtr, ytr)
+ 
     scaler = StandardScaler()
     Xtr_s = scaler.fit_transform(Xtr)
     Xte_s = scaler.transform(Xte)
-    knn = KNeighborsClassifier(n_neighbors=5)
-    knn.fit(Xtr_s, ytr)
+ 
+    knn = KNeighborsClassifier(n_neighbors=5).fit(Xtr_s, ytr)
+    svc = SVC(kernel="rbf", C=1.0, probability=True, random_state=42).fit(Xtr_s, ytr)
+ 
+    dt_pred  = dt.predict(Xte)
     knn_pred = knn.predict(Xte_s)
-
-    def met(yte, pred):
-        return {
-            "accuracy":  round(accuracy_score(yte, pred)*100, 2),
-            "precision": round(precision_score(yte, pred, zero_division=0)*100, 1),
-            "recall":    round(recall_score(yte, pred, zero_division=0)*100, 1),
-            "f1":        round(f1_score(yte, pred, zero_division=0)*100, 1),
-        }
-
-    return (dt, knn, scaler, Xtr, Xte, ytr, yte,
-            dt_pred, knn_pred,
-            met(yte, dt_pred), met(yte, knn_pred),
-            ozellikler)
-
-
-# ── K OPTİMİZASYON ANALİZİ ─────────────────────────────────
-def k_optimizasyon_reg(Xtr, Xte, ytr, yte):
-    """K=1..20 için eğitim/test R² döndürür."""
-    scaler = StandardScaler()
-    Xtr_s = scaler.fit_transform(Xtr)
-    Xte_s = scaler.transform(Xte)
-    tr_list, te_list = [], []
-    for k in range(1, 21):
-        m = KNeighborsRegressor(n_neighbors=k).fit(Xtr_s, ytr)
-        tr_list.append(r2_score(ytr, m.predict(Xtr_s)))
-        te_list.append(r2_score(yte, m.predict(Xte_s)))
-    return tr_list, te_list
-
-def k_optimizasyon_clf(Xtr, Xte, ytr, yte):
-    """K=1..20 için eğitim/test accuracy döndürür."""
-    scaler = StandardScaler()
-    Xtr_s = scaler.fit_transform(Xtr)
-    Xte_s = scaler.transform(Xte)
-    tr_list, te_list = [], []
-    for k in range(1, 21):
-        m = KNeighborsClassifier(n_neighbors=k).fit(Xtr_s, ytr)
-        tr_list.append(accuracy_score(ytr, m.predict(Xtr_s)))
-        te_list.append(accuracy_score(yte, m.predict(Xte_s)))
-    return tr_list, te_list
-
-
-# ============================================================
-# ── VERİ YÜKLE
-# ============================================================
-reg_df = sentetik_regression_verisi()
-ai4i_df, sentetik_mi = ai4i_verisi_yukle()
-
-(dt_r, knn_r, scaler_r,
- Xtr_r, Xte_r, ytr_r, yte_r,
- dt_pred_r, knn_pred_r,
- dt_met_r, knn_met_r) = regression_modelleri_egit(reg_df)
-
-(dt_c, knn_c, scaler_c,
- Xtr_c, Xte_c, ytr_c, yte_c,
- dt_pred_c, knn_pred_c,
- dt_met_c, knn_met_c,
- clf_ozellikler) = classification_modelleri_egit(ai4i_df)
-
-
-# ============================================================
-# ── BAŞLIK
-# ============================================================
-col_t1, col_t2 = st.columns([3,1])
-with col_t1:
-    st.title("🏭 Üretim Zekâ Platformu v2")
-    st.markdown("**Decision Tree** ve **KNN** karşılaştırmalı makine öğrenmesi — Regression & Classification")
-with col_t2:
-    if sentetik_mi:
-        st.warning("⚠️ Demo mod\nai4i2020.csv bulunamadı")
-    else:
-        st.success("✅ AI4I 2020\nGerçek veri yüklendi")
-
+    svc_pred = svc.predict(Xte_s)
+ 
+    def met(pred):
+        return {"acc":  round(accuracy_score(yte,pred)*100,2),
+                "prec": round(precision_score(yte,pred,zero_division=0)*100,1),
+                "rec":  round(recall_score(yte,pred,zero_division=0)*100,1),
+                "f1":   round(f1_score(yte,pred,zero_division=0)*100,1)}
+ 
+    return ({"dt":met(dt_pred), "knn":met(knn_pred), "svc":met(svc_pred)},
+            Xtr.to_json(), Xte.to_json(),
+            ytr.to_json(), yte.to_json(),
+            list(dt_pred), list(knn_pred), list(svc_pred),
+            scaler.mean_.tolist(), scaler.scale_.tolist(),
+            cols)
+ 
+# ── VERİ VE MODEL YÜKLEME ─────────────────────────────────────
+with st.spinner("Modeller eğitiliyor..."):
+    reg_df = sentetik_regression_verisi()
+    ai4i_df, sentetik_mi = ai4i_verisi_yukle()
+ 
+    (r_met, Xtr_r_j, Xte_r_j, ytr_r_j, yte_r_j,
+     dt_pred_r, knn_pred_r, svr_pred_r,
+     r_scaler_mean, r_scaler_scale,
+     feat_imp, feat_names) = regresyon_egit(reg_df.to_json())
+ 
+    (c_met, Xtr_c_j, Xte_c_j, ytr_c_j, yte_c_j,
+     dt_pred_c, knn_pred_c, svc_pred_c,
+     c_scaler_mean, c_scaler_scale,
+     clf_cols) = siniflandirma_egit(ai4i_df.to_json())
+ 
+# Numpy dizilerine çevir
+yte_r = np.array(pd.read_json(yte_r_j).squeeze())
+yte_c = np.array(pd.read_json(yte_c_j).squeeze())
+dt_pred_r  = np.array(dt_pred_r)
+knn_pred_r = np.array(knn_pred_r)
+svr_pred_r = np.array(svr_pred_r)
+dt_pred_c  = np.array(dt_pred_c)
+knn_pred_c = np.array(knn_pred_c)
+svc_pred_c = np.array(svc_pred_c)
+r_scaler_mean  = np.array(r_scaler_mean)
+r_scaler_scale = np.array(r_scaler_scale)
+c_scaler_mean  = np.array(c_scaler_mean)
+c_scaler_scale = np.array(c_scaler_scale)
+ 
+def r_scale(x): return (np.array(x) - r_scaler_mean) / r_scaler_scale
+def c_scale(x): return (np.array(x) - c_scaler_mean) / c_scaler_scale
+ 
+def dt_reg_predict(vals):
+    # Yeniden eğit (hafif, cached değil ama hızlı)
+    X = reg_df[feat_names]; y = reg_df["toplam_maliyet"]
+    Xtr,_,ytr,_ = train_test_split(X, y, test_size=0.2, random_state=42)
+    m = DecisionTreeRegressor(max_depth=5, random_state=42).fit(Xtr, ytr)
+    return m.predict(pd.DataFrame([dict(zip(feat_names, vals))]))[0]
+ 
+# ── BAŞLIK ────────────────────────────────────────────────────
+st.title("🏭 Üretim Zekâ Platformu")
+st.markdown("**Decision Tree · KNN · SVM** — Regresyon ve Sınıflandırma karşılaştırması")
+if sentetik_mi:
+    st.caption("ℹ️ AI4I sınıflandırma verisi demo modda (sentetik). Gerçek veri için ai4i2020.csv yükleyebilirsiniz.")
 st.divider()
-
-with st.expander("📂 AI4I 2020 CSV Yükle (opsiyonel)"):
-    yuklenen = st.file_uploader("ai4i2020.csv", type=["csv"])
-    if yuklenen:
-        st.cache_data.clear(); st.cache_resource.clear(); st.rerun()
-
-
-# ============================================================
-# ── ANA SEKMELER
-# ============================================================
-ana1, ana2, ana3, ana4 = st.tabs([
-    "📈 REGRESSION — Maliyet Tahmini",
-    "🔴 CLASSIFICATION — Arıza Tahmini",
-    "🆚 DT vs KNN Karşılaştırma",
-    "🔍 K Optimizasyon Analizi",
+ 
+# ── SEKMELER ─────────────────────────────────────────────────
+t1, t2, t3, t4, t5 = st.tabs([
+    "📈 Maliyet Tahmini",
+    "🔴 Arıza Tahmini",
+    "🆚 Model Karşılaştırma",
+    "🔍 Hiperparametre Analizi",
+    "📚 Algoritma Teorisi"
 ])
-
-
+ 
 # ════════════════════════════════════════════════════════════
-# SEKME 1 — REGRESSION
+# SEKME 1 — REGRESYON / MALİYET TAHMİNİ
 # ════════════════════════════════════════════════════════════
-with ana1:
+with t1:
     st.markdown("### 📈 Üretim Maliyeti Tahmini")
-    st.markdown("*Sentetik üretim verisi (n=500)*")
+    st.markdown("Sol taraftaki parametreleri ayarlayın — tahmin **anında** güncellenir.")
     st.divider()
-
-    # Model seçici
-    model_sec_r = st.radio(
-        "🤖 Model Seçin:",
-        ["🌳 Decision Tree", "🔵 KNN (K=5)"],
-        horizontal=True, key="model_r"
-    )
-    kullan_dt_r = "Decision Tree" in model_sec_r
-
-    aktif_met_r  = dt_met_r  if kullan_dt_r else knn_met_r
-    aktif_pred_r = dt_pred_r if kullan_dt_r else knn_pred_r
-
-    st.divider()
+ 
     col_gir, col_sonu = st.columns([1, 2])
-
+ 
     with col_gir:
-        st.markdown("#### ⚙️ Parametreler")
-        r_uretim   = st.slider("📦 Üretim Miktarı (adet)", 50, 500, 250, key="r_ur")
-        r_makine   = st.slider("🔧 Makine Yaşı (yıl)", 1, 20, 8, key="r_mk")
-        r_iscilik  = st.slider("👷 İşçilik Saati", 4.0, 16.0, 10.0, step=0.5, key="r_is")
-        r_hammadde = st.slider("🪨 Hammadde Fiyatı (TL)", 10, 80, 45, key="r_hm")
-        r_vardiya  = st.radio("🌙 Vardiya", ["Gündüz", "Gece"], key="r_vr")
+        st.markdown("#### ⚙️ Üretim Parametreleri")
+        r_uretim   = st.slider("📦 Üretim Miktarı (adet)", 50, 500, 250)
+        r_makine   = st.slider("🔧 Makine Yaşı (yıl)", 1, 20, 8)
+        r_iscilik  = st.slider("👷 İşçilik Saati", 4.0, 16.0, 10.0, step=0.5)
+        r_hammadde = st.slider("🪨 Hammadde Fiyatı (TL/birim)", 10, 80, 45)
+        r_vardiya  = st.radio("🌙 Vardiya", ["Gündüz", "Gece"])
         r_vval     = 1 if r_vardiya == "Gündüz" else 2
         st.divider()
-        r_btn = st.button("🔍 Maliyet Tahmin Et", type="primary", use_container_width=True, key="r_btn")
-
+        model_r = st.radio("🤖 Aktif Model", ["Decision Tree", "KNN", "SVM"], horizontal=True)
+ 
     with col_sonu:
-        st.markdown(f"#### 📊 Model Performansı — {'Decision Tree' if kullan_dt_r else 'KNN'}")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("R² Skoru", aktif_met_r["r2"])
-        m2.metric("MAE", f"{aktif_met_r['mae']:,.0f} TL")
-        m3.metric("RMSE", f"{aktif_met_r['rmse']:,.0f} TL")
-
-        # DT vs KNN hızlı karşılaştırma
-        delta_r2 = round(knn_met_r["r2"] - dt_met_r["r2"], 4)
-        if kullan_dt_r:
-            st.caption(f"KNN ile karşılaştırma: KNN R² = {knn_met_r['r2']} (fark: {delta_r2:+.4f})")
+        # Tahmin — anlık, buton gerektirmez
+        girdi_ham = np.array([[r_uretim, r_makine, r_iscilik, r_hammadde, r_vval]], dtype=float)
+        girdi_scaled = r_scale(girdi_ham[0]).reshape(1, -1)
+ 
+        # Basit regresyon formülü ile DT tahmini (önbellek sorunlarını önler)
+        tahmin_dt  = (r_uretim * r_hammadde * 0.9 + r_iscilik * 250 +
+                      r_makine * 150 + (r_vval == 2) * 1200)
+        # KNN: ağırlıklı ortalama (yaklaşık, hızlı)
+        X_all = reg_df[feat_names].values
+        y_all = reg_df["toplam_maliyet"].values
+        X_all_s = (X_all - r_scaler_mean) / r_scaler_scale
+        dists = np.sqrt(((X_all_s - girdi_scaled) ** 2).sum(axis=1))
+        k_idx = np.argsort(dists)[:5]
+        tahmin_knn = y_all[k_idx].mean()
+        # SVM: linear approximation
+        tahmin_svm = tahmin_dt * 1.02  # fallback — gerçek model aşağıda
+ 
+        # Gerçek model tahmini (sklearn objeleri cache'den alınamıyor, yeniden eğit)
+        @st.cache_data
+        def predict_all_reg(ur, mk, is_, hm, vr):
+            df = sentetik_regression_verisi()
+            X = df[["uretim_miktari","makine_yasi","iscilik_saati","hammadde_fiyati","vardiya"]]
+            y = df["toplam_maliyet"]
+            Xtr, _, ytr, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+            sc = StandardScaler().fit(Xtr)
+            girdi = pd.DataFrame([{"uretim_miktari":ur,"makine_yasi":mk,
+                                    "iscilik_saati":is_,"hammadde_fiyati":hm,"vardiya":vr}])
+            girdi_s = sc.transform(girdi)
+            dt  = DecisionTreeRegressor(max_depth=5,random_state=42).fit(Xtr,ytr)
+            knn = KNeighborsRegressor(n_neighbors=5).fit(sc.transform(Xtr),ytr)
+            svr = SVR(kernel="rbf",C=100,epsilon=0.1).fit(sc.transform(Xtr),ytr)
+            return float(dt.predict(girdi)[0]), float(knn.predict(girdi_s)[0]), float(svr.predict(girdi_s)[0])
+ 
+        tahmin_dt, tahmin_knn, tahmin_svm = predict_all_reg(
+            r_uretim, r_makine, r_iscilik, r_hammadde, r_vval)
+ 
+        if   model_r == "Decision Tree": tahmin = tahmin_dt
+        elif model_r == "KNN":           tahmin = tahmin_knn
+        else:                            tahmin = tahmin_svm
+ 
+        birim = tahmin / r_uretim
+ 
+        st.markdown(f"#### 💰 Tahmin Sonucu — {model_r}")
+        c1, c2 = st.columns(2)
+        c1.metric("Toplam Maliyet", f"{tahmin:,.0f} TL")
+        c2.metric("Birim Maliyet",  f"{birim:,.0f} TL/adet")
+ 
+        if tahmin > 25000:
+            st.error("⚠️ Yüksek maliyet — optimizasyon önerilir.")
+        elif tahmin > 15000:
+            st.warning("🟡 Orta maliyet seviyesi.")
         else:
-            st.caption(f"DT ile karşılaştırma: DT R² = {dt_met_r['r2']} (fark: {-delta_r2:+.4f})")
-
+            st.success("✅ Normal maliyet seviyesi.")
+ 
+        st.info(f"🌳 DT: **{tahmin_dt:,.0f} TL** &nbsp;|&nbsp; 🔵 KNN: **{tahmin_knn:,.0f} TL** &nbsp;|&nbsp; 🟣 SVM: **{tahmin_svm:,.0f} TL**")
+ 
         st.divider()
-
-        if r_btn:
-            girdi = pd.DataFrame([{
-                "uretim_miktari": r_uretim, "makine_yasi": r_makine,
-                "iscilik_saati": r_iscilik, "hammadde_fiyati": r_hammadde,
-                "vardiya": r_vval
-            }])
-            if kullan_dt_r:
-                tahmin = dt_r.predict(girdi)[0]
-            else:
-                girdi_s = scaler_r.transform(girdi)
-                tahmin  = knn_r.predict(girdi_s)[0]
-
-            birim = tahmin / r_uretim
-            c1, c2 = st.columns(2)
-            c1.metric("💰 Tahmini Maliyet", f"{tahmin:,.0f} TL")
-            c2.metric("📌 Birim Maliyet",   f"{birim:,.0f} TL/adet")
-
-            if tahmin > 25000:
-                st.error(f"⚠️ Yüksek maliyet — optimizasyon önerilir.")
-            elif tahmin > 15000:
-                st.warning(f"🟡 Orta maliyet seviyesi.")
-            else:
-                st.success(f"✅ Normal maliyet seviyesi.")
-
-            # İki modeli karşılaştır
-            tahmin_dt  = dt_r.predict(girdi)[0]
-            tahmin_knn = knn_r.predict(scaler_r.transform(girdi))[0]
-            st.info(f"🌳 DT tahmini: **{tahmin_dt:,.0f} TL** | 🔵 KNN tahmini: **{tahmin_knn:,.0f} TL** | Fark: {abs(tahmin_dt-tahmin_knn):,.0f} TL")
-        else:
-            st.info("← Parametreleri ayarlayıp **Maliyet Tahmin Et** butonuna tıklayın.")
-
+        st.markdown("#### 📊 Test Seti Performansı")
+        perf = pd.DataFrame({
+            "Model": ["🌳 Decision Tree", "🔵 KNN", "🟣 SVM"],
+            "R²":    [r_met["dt"]["r2"], r_met["knn"]["r2"], r_met["svr"]["r2"]],
+            "MAE":   [f"{r_met['dt']['mae']:,.0f} TL", f"{r_met['knn']['mae']:,.0f} TL", f"{r_met['svr']['mae']:,.0f} TL"],
+            "RMSE":  [f"{r_met['dt']['rmse']:,.0f} TL", f"{r_met['knn']['rmse']:,.0f} TL", f"{r_met['svr']['rmse']:,.0f} TL"],
+        })
+        st.dataframe(perf, hide_index=True, use_container_width=True)
+ 
     st.divider()
-
+ 
     # Grafikler
-    gc1, gc2 = st.columns(2)
-
-    with gc1:
-        st.markdown("##### 🎯 Gerçek vs Tahmin")
-        fig, ax = plt.subplots(figsize=(5, 3.5))
-        ax.scatter(yte_r, dt_pred_r,  alpha=0.35, s=12, color="#e74c3c", label="Decision Tree")
-        ax.scatter(yte_r, knn_pred_r, alpha=0.35, s=12, color="#3498db", label="KNN")
+    g1, g2 = st.columns(2)
+    with g1:
+        st.markdown("##### 🎯 Gerçek vs Tahmin (Test Seti)")
+        fig, ax = plt.subplots(figsize=(5,3.5))
+        ax.scatter(yte_r, dt_pred_r,  alpha=0.3, s=10, color="#e74c3c", label="DT")
+        ax.scatter(yte_r, knn_pred_r, alpha=0.3, s=10, color="#3498db", label="KNN")
+        ax.scatter(yte_r, svr_pred_r, alpha=0.3, s=10, color="#9b59b6", label="SVM")
         mn, mx = float(yte_r.min()), float(yte_r.max())
-        ax.plot([mn,mx],[mn,mx], "k--", lw=1.5, label="Mükemmel")
+        ax.plot([mn,mx],[mn,mx],"k--",lw=1.5,label="Mükemmel")
         ax.set_xlabel("Gerçek (TL)"); ax.set_ylabel("Tahmin (TL)")
-        ax.set_title("DT vs KNN — Gerçek vs Tahmin", fontsize=11, fontweight="bold")
-        ax.legend(fontsize=8); plt.tight_layout()
-        st.pyplot(fig)
-
-    with gc2:
-        st.markdown("##### 📌 Özellik Önemi (Decision Tree)")
-        imp = dt_r.feature_importances_
-        fnames = ["Üretim\nMiktarı","Makine\nYaşı","İşçilik\nSaati","Hammadde\nFiyatı","Vardiya"]
+        ax.legend(fontsize=8); plt.tight_layout(); st.pyplot(fig)
+ 
+    with g2:
+        st.markdown("##### 📌 Özellik Önemi — Decision Tree")
+        labels = ["Üretim\nMiktarı","Makine\nYaşı","İşçilik\nSaati","Hammadde\nFiyatı","Vardiya"]
+        imp = np.array(feat_imp)
         idx = np.argsort(imp)
-        fig2, ax2 = plt.subplots(figsize=(5, 3.5))
-        colors = ["#3498db","#2ecc71","#e67e22","#e74c3c","#9b59b6"]
-        ax2.barh([fnames[i] for i in idx], imp[idx],
-                  color=[colors[i] for i in idx], edgecolor="white")
-        for i, v in enumerate(imp[idx]):
+        fig2, ax2 = plt.subplots(figsize=(5,3.5))
+        ax2.barh([labels[i] for i in idx], imp[idx],
+                 color=["#3498db","#2ecc71","#e67e22","#e74c3c","#9b59b6"])
+        for i,v in enumerate(imp[idx]):
             ax2.text(v+0.005, i, f"{v:.3f}", va="center", fontsize=9)
-        ax2.set_xlabel("Önem Skoru")
-        ax2.set_title("DT Özellik Önemi\n(KNN özellik önemi hesaplamaz)", fontsize=10, fontweight="bold")
-        plt.tight_layout(); st.pyplot(fig2)
-
-    # KNN notu
-    st.info("ℹ️ **KNN Notu:** KNN'de özellik önemi hesaplanamaz — tüm özellikler eşit ağırlıkta mesafe hesabına girer. Bu nedenle özellik önemi yalnızca Decision Tree için gösterilmektedir.")
-
-    # Overfitting — DT
-    with st.expander("🔍 Overfitting Analizi — Decision Tree (max_depth)"):
-        tr2_list, te2_list = [], []
-        for d in range(1,16):
-            m = DecisionTreeRegressor(max_depth=d, random_state=42).fit(Xtr_r, ytr_r)
-            tr2_list.append(r2_score(ytr_r, m.predict(Xtr_r)))
-            te2_list.append(r2_score(yte_r, m.predict(Xte_r)))
-        chart_df = pd.DataFrame({"Eğitim R²": tr2_list, "Test R²": te2_list}, index=range(1,16))
-        chart_df.index.name = "max_depth"
-        st.line_chart(chart_df, height=220)
-
-    with st.expander("🌳 Karar Ağacı Kuralları (depth=3)"):
-        sm = DecisionTreeRegressor(max_depth=3, random_state=42).fit(Xtr_r, ytr_r)
-        st.code(export_text(sm, feature_names=list(Xtr_r.columns)), language="text")
-
-
+        ax2.set_xlabel("Önem Skoru"); plt.tight_layout(); st.pyplot(fig2)
+ 
+    st.info("ℹ️ KNN ve SVM StandardScaler gerektirirken Karar Ağacı gerektirmez — bu fark Bölüm 3'te detaylı açıklanmıştır.")
+ 
 # ════════════════════════════════════════════════════════════
-# SEKME 2 — CLASSIFICATION
+# SEKME 2 — SINIFLANDIRMA / ARIZA TAHMİNİ
 # ════════════════════════════════════════════════════════════
-with ana2:
-    st.markdown("### 🔴 Makine Arıza Tahmini (Classification)")
-    veri_tipi = "Sentetik" if sentetik_mi else "AI4I 2020 Gerçek Veri"
-    st.markdown(f"*{veri_tipi} (n={len(ai4i_df):,})*")
+with t2:
+    st.markdown("### 🔴 Makine Arızası Tahmini — AI4I 2020")
     st.divider()
-
-    model_sec_c = st.radio(
-        "🤖 Model Seçin:",
-        ["🌳 Decision Tree", "🔵 KNN (K=5)"],
-        horizontal=True, key="model_c"
-    )
-    kullan_dt_c = "Decision Tree" in model_sec_c
-    aktif_met_c  = dt_met_c  if kullan_dt_c else knn_met_c
-    aktif_pred_c = dt_pred_c if kullan_dt_c else knn_pred_c
-
-    st.divider()
-
-    col_gir2, col_sonu2 = st.columns([1, 2])
-
-    with col_gir2:
-        st.markdown("#### ⚙️ Parametreler")
-        c_tip    = st.selectbox("🏷️ Ürün Tipi", ["L — Düşük","M — Orta","H — Yüksek"], key="c_tip")
-        c_tipval = {"L":0,"M":1,"H":2}[c_tip[0]]
-        c_air_c  = st.slider("🌡️ Hava Sıcaklığı (°C)", 22.0, 32.0, 27.0, step=0.1, key="c_air")
-        c_air    = c_air_c + 273.15
-        c_proc_c = st.slider("🔥 Proses Sıcaklığı (°C)", 32.0, 42.0, 37.0, step=0.1, key="c_proc")
-        c_proc   = c_proc_c + 273.15
-        c_rpm    = st.slider("⚡ Dönüş Hızı (rpm)", 1168, 2886, 1538, key="c_rpm")
-        c_tork   = st.slider("🔩 Tork (Nm)", 3.8, 76.6, 40.0, step=0.1, key="c_tork")
-        c_wear   = st.slider("🔧 Takım Aşınması (dk)", 0, 250, 100, key="c_wear")
+ 
+    col_g, col_s = st.columns([1, 2])
+ 
+    with col_g:
+        st.markdown("#### ⚙️ Makine Sensör Değerleri")
+        c_air  = st.slider("🌡️ Hava Sıcaklığı (K)", 295.0, 305.0, 300.0, step=0.1)
+        c_proc = st.slider("🔥 İşlem Sıcaklığı (K)", 305.0, 315.0, 310.0, step=0.1)
+        c_rpm  = st.slider("⚙️ Dönüş Hızı (rpm)", 1168, 2886, 1538)
+        c_tork = st.slider("🔩 Tork (Nm)", 4.0, 77.0, 40.0, step=0.5)
+        c_wear = st.slider("🔧 Takım Aşınması (dk)", 0, 250, 100)
+        c_tip  = st.selectbox("🏷️ Ürün Tipi", ["L (Düşük)", "M (Orta)", "H (Yüksek)"])
+        c_tip_e = {"L (Düşük)":0,"M (Orta)":1,"H (Yüksek)":2}[c_tip]
         st.divider()
-        c_btn = st.button("🔍 Arıza Riskini Tahmin Et", type="primary", use_container_width=True, key="c_btn")
-
-    with col_sonu2:
-        st.markdown(f"#### 📊 Model Performansı — {'Decision Tree' if kullan_dt_c else 'KNN'}")
-        cm1, cm2, cm3, cm4 = st.columns(4)
-        cm1.metric("Accuracy",  f"%{aktif_met_c['accuracy']}")
-        cm2.metric("Precision", f"%{aktif_met_c['precision']}")
-        cm3.metric("Recall",    f"%{aktif_met_c['recall']}", help="Kritik metrik — arızaları yakalama oranı")
-        cm4.metric("F1 Score",  f"%{aktif_met_c['f1']}")
-
-        # Recall karşılaştırması
-        st.caption(f"🌳 DT Recall: %{dt_met_c['recall']} | 🔵 KNN Recall: %{knn_met_c['recall']}")
-        st.divider()
-
-        if c_btn:
-            girdi2_dict = {}
-            for col in clf_ozellikler:
-                if "type"    in col: girdi2_dict[col] = c_tipval
-                elif "air"   in col: girdi2_dict[col] = c_air
-                elif "process" in col: girdi2_dict[col] = c_proc
-                elif "speed" in col or "rpm" in col: girdi2_dict[col] = c_rpm
-                elif "torque" in col or "tork" in col: girdi2_dict[col] = c_tork
-                elif "wear"  in col: girdi2_dict[col] = c_wear
-
-            girdi2 = pd.DataFrame([girdi2_dict])
-
-            if kullan_dt_c:
-                pred = dt_c.predict(girdi2)[0]
-                prob = dt_c.predict_proba(girdi2)[0]
-            else:
-                girdi2_s = scaler_c.transform(girdi2)
-                pred = knn_c.predict(girdi2_s)[0]
-                prob = knn_c.predict_proba(girdi2_s)[0]
-
-            if pred == 1:
-                st.error(f"🔴 **ARIZA RİSKİ YÜKSEK**\nArıza olasılığı: %{prob[1]*100:.1f}")
-            else:
-                st.success(f"✅ **NORMAL ÇALIŞMA**\nArıza olasılığı: %{prob[1]*100:.1f}")
-
-            st.progress(float(prob[1]), text=f"Arıza olasılığı: %{prob[1]*100:.1f}")
-
-            # Her iki modelin tahminini karşılaştır
-            dt_pred_tek  = dt_c.predict(girdi2)[0]
-            knn_pred_tek = knn_c.predict(scaler_c.transform(girdi2))[0]
-            dt_prob_tek  = dt_c.predict_proba(girdi2)[0][1]
-            knn_prob_tek = knn_c.predict_proba(scaler_c.transform(girdi2))[0][1]
-
-            etiket_dt  = "🔴 ARIZA" if dt_pred_tek  == 1 else "✅ NORMAL"
-            etiket_knn = "🔴 ARIZA" if knn_pred_tek == 1 else "✅ NORMAL"
-            st.info(f"🌳 DT: **{etiket_dt}** (%{dt_prob_tek*100:.1f}) | 🔵 KNN: **{etiket_knn}** (%{knn_prob_tek*100:.1f})")
+        model_c = st.radio("🤖 Aktif Model", ["Decision Tree","KNN","SVM"], horizontal=True, key="mc")
+ 
+    with col_s:
+        @st.cache_data
+        def predict_all_clf(air, proc, rpm, tork, wear, tip_e):
+            df, _ = ai4i_verisi_yukle()
+            cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
+                                "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
+            X = df[cols]; y = df["machine_failure"]
+            Xtr,_,ytr,_ = train_test_split(X, y, test_size=0.2, random_state=42)
+            sc = StandardScaler().fit(Xtr)
+            vals = [tip_e, air, proc, rpm, tork, wear]
+            girdi = pd.DataFrame([dict(zip(cols, vals[:len(cols)]))])
+            girdi_s = sc.transform(girdi)
+            dt  = DecisionTreeClassifier(max_depth=5,random_state=42).fit(Xtr,ytr)
+            knn = KNeighborsClassifier(n_neighbors=5).fit(sc.transform(Xtr),ytr)
+            svc = SVC(kernel="rbf",C=1.0,probability=True,random_state=42).fit(sc.transform(Xtr),ytr)
+            res = {}
+            for name, m, g in [("dt",dt,girdi),("knn",knn,girdi_s),("svc",svc,girdi_s)]:
+                pred = m.predict(g)[0]
+                prob = m.predict_proba(g)[0][1]
+                res[name] = {"pred":int(pred),"prob":float(prob)}
+            return res
+ 
+        with st.spinner("Hesaplanıyor..."):
+            clf_res = predict_all_clf(c_air, c_proc, c_rpm, c_tork, c_wear, c_tip_e)
+ 
+        aktif = clf_res[{"Decision Tree":"dt","KNN":"knn","SVM":"svc"}[model_c]]
+ 
+        st.markdown(f"#### 🎯 Tahmin Sonucu — {model_c}")
+        if aktif["pred"] == 1:
+            st.error(f"🔴 **ARIZA RİSKİ YÜKSEKx** — Olasılık: %{aktif['prob']*100:.1f}")
         else:
-            st.info("← Makine parametrelerini girin ve tahmin butona basın.")
-
+            st.success(f"✅ **NORMAL ÇALIŞMA** — Arıza olasılığı: %{aktif['prob']*100:.1f}")
+ 
+        st.progress(aktif["prob"], text=f"Arıza olasılığı: %{aktif['prob']*100:.1f}")
+ 
+        d_dt  = "🔴 ARIZA" if clf_res["dt"]["pred"]==1  else "✅ Normal"
+        d_knn = "🔴 ARIZA" if clf_res["knn"]["pred"]==1 else "✅ Normal"
+        d_svc = "🔴 ARIZA" if clf_res["svc"]["pred"]==1 else "✅ Normal"
+        st.info(f"🌳 DT: **{d_dt}** (%{clf_res['dt']['prob']*100:.1f}) &nbsp;|&nbsp; "
+                f"🔵 KNN: **{d_knn}** (%{clf_res['knn']['prob']*100:.1f}) &nbsp;|&nbsp; "
+                f"🟣 SVM: **{d_svc}** (%{clf_res['svc']['prob']*100:.1f})")
+ 
+        st.divider()
+        st.markdown("#### 📊 Model Performansı (Test Seti, n=2000)")
+        cp = pd.DataFrame({
+            "Model":    ["🌳 DT","🔵 KNN","🟣 SVM"],
+            "Accuracy": [f"%{c_met['dt']['acc']}",f"%{c_met['knn']['acc']}",f"%{c_met['svc']['acc']}"],
+            "Recall ⭐":[f"%{c_met['dt']['rec']}",f"%{c_met['knn']['rec']}",f"%{c_met['svc']['rec']}"],
+            "Precision":[f"%{c_met['dt']['prec']}",f"%{c_met['knn']['prec']}",f"%{c_met['svc']['prec']}"],
+            "F1":       [f"%{c_met['dt']['f1']}",f"%{c_met['knn']['f1']}",f"%{c_met['svc']['f1']}"],
+        })
+        st.dataframe(cp, hide_index=True, use_container_width=True)
+        st.caption("⭐ Recall: Gerçek arızaların kaç %'i tespit edilebildi — üretimde en kritik metrik.")
+ 
     st.divider()
-
-    gc3, gc4 = st.columns(2)
-
-    with gc3:
-        st.markdown("##### 🗂️ Confusion Matrix — Decision Tree")
-        cm_dt = confusion_matrix(yte_c, dt_pred_c)
-        fig3, ax3 = plt.subplots(figsize=(4, 3.5))
-        ax3.imshow(cm_dt, cmap="Reds")
-        ax3.set_xticks([0,1]); ax3.set_yticks([0,1])
-        ax3.set_xticklabels(["Normal","Arıza"])
-        ax3.set_yticklabels(["Normal","Arıza"])
-        ax3.set_xlabel("Tahmin"); ax3.set_ylabel("Gerçek")
-        ax3.set_title(f"DT — Recall: %{dt_met_c['recall']}", fontsize=11, fontweight="bold")
-        for i in range(2):
-            for j in range(2):
-                ax3.text(j, i, str(cm_dt[i,j]), ha="center", va="center",
-                         fontsize=14, fontweight="bold",
-                         color="white" if cm_dt[i,j] > cm_dt.max()/2 else "black")
-        plt.tight_layout(); st.pyplot(fig3)
-
-    with gc4:
-        st.markdown("##### 🗂️ Confusion Matrix — KNN")
-        cm_knn = confusion_matrix(yte_c, knn_pred_c)
-        fig4, ax4 = plt.subplots(figsize=(4, 3.5))
-        ax4.imshow(cm_knn, cmap="Blues")
-        ax4.set_xticks([0,1]); ax4.set_yticks([0,1])
-        ax4.set_xticklabels(["Normal","Arıza"])
-        ax4.set_yticklabels(["Normal","Arıza"])
-        ax4.set_xlabel("Tahmin"); ax4.set_ylabel("Gerçek")
-        ax4.set_title(f"KNN — Recall: %{knn_met_c['recall']}", fontsize=11, fontweight="bold")
-        for i in range(2):
-            for j in range(2):
-                ax4.text(j, i, str(cm_knn[i,j]), ha="center", va="center",
-                         fontsize=14, fontweight="bold",
-                         color="white" if cm_knn[i,j] > cm_knn.max()/2 else "black")
-        plt.tight_layout(); st.pyplot(fig4)
-
-    with st.expander("📋 Detaylı Sınıflandırma Raporu"):
-        r1, r2 = st.columns(2)
-        with r1:
-            st.markdown("**Decision Tree**")
-            st.code(classification_report(yte_c, dt_pred_c, target_names=["Normal","Arıza"]))
-        with r2:
-            st.markdown("**KNN**")
-            st.code(classification_report(yte_c, knn_pred_c, target_names=["Normal","Arıza"]))
-
-    with st.expander("🌳 Karar Ağacı Görselleştirmesi (depth=3)"):
-        sm2 = DecisionTreeClassifier(max_depth=3, random_state=42).fit(Xtr_c, ytr_c)
-        fig5, ax5 = plt.subplots(figsize=(16, 6))
-        plot_tree(sm2, feature_names=clf_ozellikler,
-                  class_names=["Normal","Arıza"],
-                  filled=True, rounded=True, fontsize=8,
-                  ax=ax5, impurity=False)
-        ax5.set_title("Classification Tree (depth=3)", fontsize=12, fontweight="bold")
-        plt.tight_layout(); st.pyplot(fig5)
-
-
+    st.markdown("#### 🗂️ Confusion Matrix (Test Seti)")
+    cm1, cm2, cm3 = st.columns(3)
+    for col, pred, name, cmap in [
+        (cm1, dt_pred_c,  "Decision Tree", "Reds"),
+        (cm2, knn_pred_c, "KNN",           "Blues"),
+        (cm3, svc_pred_c, "SVM",           "Purples")
+    ]:
+        with col:
+            cm = confusion_matrix(yte_c, pred)
+            rec = round(recall_score(yte_c, pred, zero_division=0)*100,1)
+            fig, ax = plt.subplots(figsize=(3.2,2.8))
+            ax.imshow(cm, cmap=cmap)
+            ax.set_xticks([0,1]); ax.set_yticks([0,1])
+            ax.set_xticklabels(["Normal","Arıza"]); ax.set_yticklabels(["Normal","Arıza"])
+            ax.set_xlabel("Tahmin"); ax.set_ylabel("Gerçek")
+            ax.set_title(f"{name}\nRecall: %{rec}", fontsize=10, fontweight="bold")
+            for i in range(2):
+                for j in range(2):
+                    ax.text(j,i,str(cm[i,j]),ha="center",va="center",fontsize=14,fontweight="bold",
+                            color="white" if cm[i,j]>cm.max()/2 else "black")
+            plt.tight_layout(); st.pyplot(fig)
+ 
 # ════════════════════════════════════════════════════════════
 # SEKME 3 — KARŞILAŞTIRMA
 # ════════════════════════════════════════════════════════════
-with ana3:
-    st.markdown("### 🆚 Decision Tree vs KNN — Detaylı Karşılaştırma")
+with t3:
+    st.markdown("### 🆚 Üç Model Karşılaştırması")
     st.divider()
-
-    # REGRESSION TABLOSU
-    st.markdown("#### 📈 Regresyon Karşılaştırması")
-    reg_tablo = pd.DataFrame({
-        "Metrik":         ["R² Skoru", "MAE (TL)", "RMSE (TL)", "Ölçeklendirme Gerekir?",
-                           "Özellik Önemi?", "Yorumlanabilirlik", "Hız (Tahmin)"],
-        "🌳 Decision Tree": [dt_met_r["r2"], f"{dt_met_r['mae']:,.0f}", f"{dt_met_r['rmse']:,.0f}",
-                            "❌ Hayır", "✅ Evet", "⭐⭐⭐ Yüksek", "⚡ Çok Hızlı"],
-        "🔵 KNN":          [knn_met_r["r2"], f"{knn_met_r['mae']:,.0f}", f"{knn_met_r['rmse']:,.0f}",
-                            "✅ Evet (StandardScaler)", "❌ Hayır", "⭐ Düşük", "🐢 Yavaş"],
-    })
-    st.dataframe(reg_tablo, hide_index=True, use_container_width=True)
-
-    if dt_met_r["r2"] > knn_met_r["r2"]:
-        st.success(f"✅ Regresyon kazananı: **Decision Tree** (R²: {dt_met_r['r2']} > {knn_met_r['r2']})")
-    else:
-        st.success(f"✅ Regresyon kazananı: **KNN** (R²: {knn_met_r['r2']} > {dt_met_r['r2']})")
-
+ 
+    st.markdown("#### 📈 Regresyon")
+    st.dataframe(pd.DataFrame({
+        "Metrik":          ["R²","MAE (TL)","RMSE (TL)","Ölçeklendirme","Özellik Önemi","Hız"],
+        "🌳 Decision Tree":[r_met["dt"]["r2"],  f"{r_met['dt']['mae']:,.0f}",  f"{r_met['dt']['rmse']:,.0f}",  "❌ Gerekmez","✅ Var","⚡ Çok hızlı"],
+        "🔵 KNN":          [r_met["knn"]["r2"], f"{r_met['knn']['mae']:,.0f}", f"{r_met['knn']['rmse']:,.0f}", "✅ Scaler","❌ Yok","🐢 Yavaş"],
+        "🟣 SVM":          [r_met["svr"]["r2"], f"{r_met['svr']['mae']:,.0f}", f"{r_met['svr']['rmse']:,.0f}", "✅ Scaler","❌ Yok","⚡ Hızlı"],
+    }), hide_index=True, use_container_width=True)
+ 
+    best_r2 = max(r_met["dt"]["r2"], r_met["knn"]["r2"], r_met["svr"]["r2"])
+    best_name = {r_met["dt"]["r2"]:"Decision Tree",r_met["knn"]["r2"]:"KNN",r_met["svr"]["r2"]:"SVM"}[best_r2]
+    st.success(f"🏆 Regresyon R² kazananı: **{best_name}** (R²={best_r2})")
+ 
     st.divider()
-
-    # CLASSIFICATION TABLOSU
-    st.markdown("#### 🔴 Sınıflandırma Karşılaştırması")
-    clf_tablo = pd.DataFrame({
-        "Metrik":         ["Accuracy", "Precision", "Recall ⭐", "F1 Score",
-                           "Ölçeklendirme?", "Yorumlanabilirlik"],
-        "🌳 Decision Tree": [f"%{dt_met_c['accuracy']}", f"%{dt_met_c['precision']}",
-                            f"%{dt_met_c['recall']}", f"%{dt_met_c['f1']}",
-                            "❌ Hayır", "⭐⭐⭐ Yüksek"],
-        "🔵 KNN":          [f"%{knn_met_c['accuracy']}", f"%{knn_met_c['precision']}",
-                            f"%{knn_met_c['recall']}", f"%{knn_met_c['f1']}",
-                            "✅ Evet", "⭐ Düşük"],
-    })
-    st.dataframe(clf_tablo, hide_index=True, use_container_width=True)
-
-    if dt_met_c["recall"] > knn_met_c["recall"]:
-        st.success(f"✅ Recall kazananı: **Decision Tree** (%{dt_met_c['recall']} > %{knn_met_c['recall']})")
-    else:
-        st.success(f"✅ Recall kazananı: **KNN** (%{knn_met_c['recall']} > %{dt_met_c['recall']})")
-
+    st.markdown("#### 🔴 Sınıflandırma")
+    st.dataframe(pd.DataFrame({
+        "Metrik":          ["Accuracy","Recall ⭐","Precision","F1"],
+        "🌳 Decision Tree":[f"%{c_met['dt']['acc']}",f"%{c_met['dt']['rec']}",f"%{c_met['dt']['prec']}",f"%{c_met['dt']['f1']}"],
+        "🔵 KNN":          [f"%{c_met['knn']['acc']}",f"%{c_met['knn']['rec']}",f"%{c_met['knn']['prec']}",f"%{c_met['knn']['f1']}"],
+        "🟣 SVM":          [f"%{c_met['svc']['acc']}",f"%{c_met['svc']['rec']}",f"%{c_met['svc']['prec']}",f"%{c_met['svc']['f1']}"],
+    }), hide_index=True, use_container_width=True)
+ 
+    best_rec = max(c_met["dt"]["rec"], c_met["knn"]["rec"], c_met["svc"]["rec"])
+    best_rname = {c_met["dt"]["rec"]:"Decision Tree",c_met["knn"]["rec"]:"KNN",c_met["svc"]["rec"]:"SVM"}[best_rec]
+    st.success(f"🏆 Recall kazananı: **{best_rname}** (%{best_rec})")
+ 
     st.divider()
-
-    # GENEL KARŞILAŞTIRMA TABLOSU
-    st.markdown("#### 🔬 Algoritma Özellikleri")
-    genel = pd.DataFrame({
-        "Özellik": ["Algoritma Türü", "Eğitim Zamanı", "Tahmin Zamanı",
-                    "Bellek Kullanımı", "Hiperparametre",
-                    "Eksik Veri Toleransı", "Aykırı Değer Duyarlılığı",
-                    "En İyi Olduğu Durum"],
-        "🌳 Decision Tree": [
-            "Kural tabanlı", "Hızlı O(n log n)", "Çok hızlı O(log n)",
-            "Düşük (model kaydedilir)", "max_depth",
-            "Orta", "Düşük duyarlılık",
-            "Yorumlanabilirlik önemliyse"
-        ],
-        "🔵 KNN": [
-            "Örnek tabanlı (lazy)", "Sıfır — model eğitilmez", "Yavaş O(n·d)",
-            "Yüksek (tüm veri bellekte)", "K (komşu sayısı)",
-            "Düşük", "Yüksek duyarlılık",
-            "Yerel örüntüler önemliyse"
-        ],
-    })
-    st.dataframe(genel, hide_index=True, use_container_width=True)
-
-    st.warning("⚠️ **Kritik Fark:** KNN, tahmin sırasında tüm eğitim verisini bellekte tutar ve her tahmin için tüm veriyi tarar. AI4I'daki 10.000 kayıtta bu fark gözlemlenebilir; gerçek üretim ortamındaki milyonlarca kayıtta ise ciddi performans sorununa yol açar.")
-
-
+    st.markdown("#### 🔬 Teorik Karşılaştırma")
+    st.dataframe(pd.DataFrame({
+        "Özellik":    ["Paradigma","Eğitim","Tahmin Hızı","Bellek","Ölçeklendirme","Yorumlanabilirlik","Hiperparametre"],
+        "🌳 DT":      ["Eager/Kural","Ağaç öğrenir","O(log n)","Düşük","❌","⭐⭐⭐","max_depth"],
+        "🔵 KNN":     ["Lazy/Örnek","Veriyi saklar","O(n·d)","Yüksek","✅ Zorunlu","⭐","K"],
+        "🟣 SVM":     ["Eager/Marjin","SV bulur","O(sv·d)","Orta","✅ Zorunlu","⭐","C, kernel"],
+    }), hide_index=True, use_container_width=True)
+ 
 # ════════════════════════════════════════════════════════════
-# SEKME 4 — K OPTİMİZASYON
+# SEKME 4 — HİPERPARAMETRE ANALİZİ
 # ════════════════════════════════════════════════════════════
-with ana4:
-    st.markdown("### 🔍 KNN — K Değeri Optimizasyon Analizi")
-    st.markdown("*Decision Tree'deki max_depth analizinin KNN karşılığı*")
+with t4:
+    st.markdown("### 🔍 Hiperparametre Optimizasyon Analizi")
     st.divider()
-
-    opt1, opt2 = st.columns(2)
-
-    with opt1:
-        st.markdown("#### 📈 Regresyon — K vs R²")
+ 
+    hp_sec = st.radio("Analiz:", ["KNN — K Optimizasyonu","SVM — C Optimizasyonu"], horizontal=True)
+ 
+    @st.cache_data
+    def k_opt_reg():
+        df = sentetik_regression_verisi()
+        X = df[["uretim_miktari","makine_yasi","iscilik_saati","hammadde_fiyati","vardiya"]]
+        y = df["toplam_maliyet"]
+        Xtr,Xte,ytr,yte = train_test_split(X,y,test_size=0.2,random_state=42)
+        sc = StandardScaler().fit(Xtr)
+        Xtr_s,Xte_s = sc.transform(Xtr),sc.transform(Xte)
+        tr,te = [],[]
+        for k in range(1,21):
+            m = KNeighborsRegressor(n_neighbors=k).fit(Xtr_s,ytr)
+            tr.append(r2_score(ytr,m.predict(Xtr_s)))
+            te.append(r2_score(yte,m.predict(Xte_s)))
+        return tr,te
+ 
+    @st.cache_data
+    def k_opt_clf():
+        df,_ = ai4i_verisi_yukle()
+        cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
+                            "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
+        X = df[cols]; y = df["machine_failure"]
+        Xtr,Xte,ytr,yte = train_test_split(X,y,test_size=0.2,random_state=42)
+        sc = StandardScaler().fit(Xtr)
+        Xtr_s,Xte_s = sc.transform(Xtr),sc.transform(Xte)
+        tr,te = [],[]
+        for k in range(1,21):
+            m = KNeighborsClassifier(n_neighbors=k).fit(Xtr_s,ytr)
+            tr.append(accuracy_score(ytr,m.predict(Xtr_s)))
+            te.append(accuracy_score(yte,m.predict(Xte_s)))
+        return tr,te
+ 
+    @st.cache_data
+    def c_opt_reg():
+        df = sentetik_regression_verisi()
+        X = df[["uretim_miktari","makine_yasi","iscilik_saati","hammadde_fiyati","vardiya"]]
+        y = df["toplam_maliyet"]
+        Xtr,Xte,ytr,yte = train_test_split(X,y,test_size=0.2,random_state=42)
+        sc = StandardScaler().fit(Xtr)
+        Xtr_s,Xte_s = sc.transform(Xtr),sc.transform(Xte)
+        c_vals = [0.01,0.1,1,10,50,100,200,500,1000]
+        tr,te = [],[]
+        for c in c_vals:
+            m = SVR(kernel="rbf",C=c).fit(Xtr_s,ytr)
+            tr.append(r2_score(ytr,m.predict(Xtr_s)))
+            te.append(r2_score(yte,m.predict(Xte_s)))
+        return c_vals,tr,te
+ 
+    @st.cache_data
+    def c_opt_clf():
+        df,_ = ai4i_verisi_yukle()
+        cols = [c for c in ["type_encoded","air_temperature_k","process_temperature_k",
+                            "rotational_speed_rpm","torque_nm","tool_wear_min"] if c in df.columns]
+        X = df[cols]; y = df["machine_failure"]
+        Xtr,Xte,ytr,yte = train_test_split(X,y,test_size=0.2,random_state=42)
+        sc = StandardScaler().fit(Xtr)
+        Xtr_s,Xte_s = sc.transform(Xtr),sc.transform(Xte)
+        c_vals = [0.01,0.1,1,10,50,100,200,500,1000]
+        tr,te = [],[]
+        for c in c_vals:
+            m = SVC(kernel="rbf",C=c,random_state=42).fit(Xtr_s,ytr)
+            tr.append(accuracy_score(ytr,m.predict(Xtr_s)))
+            te.append(accuracy_score(yte,m.predict(Xte_s)))
+        return c_vals,tr,te
+ 
+    if "KNN" in hp_sec:
         with st.spinner("K analizi hesaplanıyor..."):
-            tr_r, te_r = k_optimizasyon_reg(Xtr_r, Xte_r, ytr_r, yte_r)
-
-        best_k_r = int(np.argmax(te_r)) + 1
-        fig_k1, ax_k1 = plt.subplots(figsize=(6, 4))
-        ax_k1.plot(range(1,21), tr_r, "o-", color="#e74c3c", label="Eğitim R²", lw=2)
-        ax_k1.plot(range(1,21), te_r, "s-", color="#3498db", label="Test R²", lw=2)
-        ax_k1.axvline(best_k_r, color="green", linestyle="--", lw=1.5, label=f"En iyi K={best_k_r}")
-        ax_k1.axvline(5, color="gray", linestyle=":", lw=1, label="Kullanılan K=5")
-        ax_k1.set_xlabel("K (Komşu Sayısı)", fontsize=11)
-        ax_k1.set_ylabel("R²", fontsize=11)
-        ax_k1.set_title("K=1 → Overfitting\nBüyük K → Underfitting", fontsize=10, fontweight="bold")
-        ax_k1.legend(fontsize=9); ax_k1.grid(alpha=0.3)
-        plt.tight_layout(); st.pyplot(fig_k1)
-
-        st.success(f"🏆 Regresyon için en iyi K: **{best_k_r}** (Test R²: {te_r[best_k_r-1]:.4f})")
-        st.dataframe(
-            pd.DataFrame({"K": range(1,21), "Eğitim R²": [round(x,4) for x in tr_r],
-                          "Test R²": [round(x,4) for x in te_r]}),
-            hide_index=True, height=250
-        )
-
-    with opt2:
-        st.markdown("#### 🔴 Sınıflandırma — K vs Accuracy")
-        with st.spinner("K analizi hesaplanıyor..."):
-            tr_c, te_c_k = k_optimizasyon_clf(Xtr_c, Xte_c, ytr_c, yte_c)
-
-        best_k_c = int(np.argmax(te_c_k)) + 1
-        fig_k2, ax_k2 = plt.subplots(figsize=(6, 4))
-        ax_k2.plot(range(1,21), tr_c, "o-", color="#e74c3c", label="Eğitim Acc", lw=2)
-        ax_k2.plot(range(1,21), te_c_k, "s-", color="#3498db", label="Test Acc", lw=2)
-        ax_k2.axvline(best_k_c, color="green", linestyle="--", lw=1.5, label=f"En iyi K={best_k_c}")
-        ax_k2.axvline(5, color="gray", linestyle=":", lw=1, label="Kullanılan K=5")
-        ax_k2.set_xlabel("K (Komşu Sayısı)", fontsize=11)
-        ax_k2.set_ylabel("Accuracy", fontsize=11)
-        ax_k2.set_title("K=1 → Overfitting\nBüyük K → Underfitting", fontsize=10, fontweight="bold")
-        ax_k2.legend(fontsize=9); ax_k2.grid(alpha=0.3)
-        plt.tight_layout(); st.pyplot(fig_k2)
-
-        st.success(f"🏆 Sınıflandırma için en iyi K: **{best_k_c}** (Test Acc: {te_c_k[best_k_c-1]*100:.2f}%)")
-        st.dataframe(
-            pd.DataFrame({"K": range(1,21),
-                          "Eğitim Acc": [f"%{x*100:.2f}" for x in tr_c],
-                          "Test Acc":   [f"%{x*100:.2f}" for x in te_c_k]}),
-            hide_index=True, height=250
-        )
-
+            tr_r,te_r = k_opt_reg()
+            tr_c,te_c = k_opt_clf()
+        h1c, h2c = st.columns(2)
+        with h1c:
+            best_k = int(np.argmax(te_r))+1
+            st.markdown(f"#### Regresyon — K vs R²  (En iyi K={best_k})")
+            fig,ax = plt.subplots(figsize=(6,4))
+            ax.plot(range(1,21),tr_r,"o-",color="#e74c3c",label="Eğitim R²",lw=2)
+            ax.plot(range(1,21),te_r,"s-",color="#3498db",label="Test R²",lw=2)
+            ax.axvline(best_k,color="green",linestyle="--",lw=1.5,label=f"En iyi K={best_k}")
+            ax.axvline(5,color="gray",linestyle=":",lw=1,label="Kullanılan K=5")
+            ax.set_xlabel("K"); ax.set_ylabel("R²"); ax.legend(); ax.grid(alpha=0.3)
+            ax.set_title("K=1 → Overfitting  |  Büyük K → Underfitting",fontsize=10)
+            plt.tight_layout(); st.pyplot(fig)
+        with h2c:
+            best_kc = int(np.argmax(te_c))+1
+            st.markdown(f"#### Sınıflandırma — K vs Accuracy  (En iyi K={best_kc})")
+            fig,ax = plt.subplots(figsize=(6,4))
+            ax.plot(range(1,21),tr_c,"o-",color="#e74c3c",label="Eğitim Acc",lw=2)
+            ax.plot(range(1,21),te_c,"s-",color="#3498db",label="Test Acc",lw=2)
+            ax.axvline(best_kc,color="green",linestyle="--",lw=1.5,label=f"En iyi K={best_kc}")
+            ax.axvline(5,color="gray",linestyle=":",lw=1,label="Kullanılan K=5")
+            ax.set_xlabel("K"); ax.set_ylabel("Accuracy"); ax.legend(); ax.grid(alpha=0.3)
+            ax.set_title("K=1 → Overfitting  |  Büyük K → Underfitting",fontsize=10)
+            plt.tight_layout(); st.pyplot(fig)
+    else:
+        with st.spinner("C analizi hesaplanıyor..."):
+            c_vals,tr_r,te_r = c_opt_reg()
+            c_vals,tr_c,te_c = c_opt_clf()
+        h1c, h2c = st.columns(2)
+        c_labels = [str(c) for c in c_vals]
+        with h1c:
+            best_c = c_vals[int(np.argmax(te_r))]
+            st.markdown(f"#### Regresyon (SVR) — C vs R²  (En iyi C={best_c})")
+            fig,ax = plt.subplots(figsize=(6,4))
+            ax.plot(range(len(c_vals)),tr_r,"o-",color="#e74c3c",label="Eğitim R²",lw=2)
+            ax.plot(range(len(c_vals)),te_r,"s-",color="#9b59b6",label="Test R²",lw=2)
+            ax.set_xticks(range(len(c_vals))); ax.set_xticklabels(c_labels,rotation=45,fontsize=8)
+            ax.set_xlabel("C"); ax.set_ylabel("R²"); ax.legend(); ax.grid(alpha=0.3)
+            ax.set_title("C küçük → Underfitting  |  C büyük → Overfitting",fontsize=10)
+            plt.tight_layout(); st.pyplot(fig)
+        with h2c:
+            best_cc = c_vals[int(np.argmax(te_c))]
+            st.markdown(f"#### Sınıflandırma (SVC) — C vs Acc  (En iyi C={best_cc})")
+            fig,ax = plt.subplots(figsize=(6,4))
+            ax.plot(range(len(c_vals)),tr_c,"o-",color="#e74c3c",label="Eğitim Acc",lw=2)
+            ax.plot(range(len(c_vals)),te_c,"s-",color="#9b59b6",label="Test Acc",lw=2)
+            ax.set_xticks(range(len(c_vals))); ax.set_xticklabels(c_labels,rotation=45,fontsize=8)
+            ax.set_xlabel("C"); ax.set_ylabel("Accuracy"); ax.legend(); ax.grid(alpha=0.3)
+            ax.set_title("C küçük → Underfitting  |  C büyük → Overfitting",fontsize=10)
+            plt.tight_layout(); st.pyplot(fig)
+ 
     st.divider()
-    st.markdown("#### 📚 K Seçimi Yorumu")
-    col_y1, col_y2 = st.columns(2)
-    with col_y1:
-        st.markdown("""
-**K=1 — Tam Overfitting:**
-Her nokta yalnızca kendine en yakın komşuya bakıyor.
-Eğitim hatası sıfır, test hatası yüksek.
-
-**K çok büyük (K→n) — Underfitting:**
-Tüm veri kümesinin ortalamasına bakıyor.
-Model hiçbir şey öğrenemiyor.
-        """)
-    with col_y2:
-        st.markdown("""
-**Optimal K — Eğitim/Test dengesi:**
-Grafikte eğitim ve test eğrilerinin
-en az uzaklaştığı bölge optimum K'yı verir.
-
-**Karar Ağacı ile analoji:**
-- K küçük = max_depth büyük (overfitting)
-- K büyük = max_depth küçük (underfitting)
-        """)
-
+    st.dataframe(pd.DataFrame({
+        "Durum":   ["Overfitting","Underfitting","Optimal"],
+        "🌳 DT":   ["max_depth büyük","max_depth küçük","Test kaybı minimum"],
+        "🔵 KNN":  ["K=1","K çok büyük","Test R²/Acc maksimum"],
+        "🟣 SVM":  ["C çok büyük","C çok küçük","Test performansı maksimum"],
+    }), hide_index=True, use_container_width=True)
+ 
+# ════════════════════════════════════════════════════════════
+# SEKME 5 — ALGORİTMA TEORİSİ
+# ════════════════════════════════════════════════════════════
+with t5:
+    st.markdown("### 📚 Algoritma Teorisi")
     st.divider()
-    st.caption("📚 Veri: Sentetik üretim verisi (Regression) | AI4I 2020 Predictive Maintenance Dataset — Matzka (2020) (Classification)")
+ 
+    a1,a2,a3 = st.tabs(["🌳 Decision Tree","🔵 KNN","🟣 SVM"])
+ 
+    with a1:
+        st.markdown("""
+**Paradigma:** Eager Learning — Kural Tabanlı
+ 
+Veri uzayını özyinelemeli ikili bölümlere ayırarak kural üretir.
+- **Regresyon:** Her yaprakta MSE minimize → yaprak ortalaması döndürülür
+- **Sınıflandırma:** Gini safsızlık indeksi minimize → çoğunluk sınıfı
+- **Ölçeklendirme gerekmez:** Kararlar `x < eşik` sıralama ilişkisine dayanır
+- **Özellik önemi:** `feature_importances_` ile hesaplanabilir — yorumlanabilirlik yüksek
+ 
+**max_depth küçük** → Underfitting | **max_depth büyük** → Overfitting
+        """)
+ 
+    with a2:
+        st.markdown("""
+**Paradigma:** Lazy Learning — Örnek Tabanlı
+ 
+Model eğitmez, tüm veriyi bellekte tutar. Tahmin anında mesafe hesaplar.
+- **Regresyon:** K komşunun ortalaması
+- **Sınıflandırma:** K komşunun çoğunluk oyu
+- **Mesafe:** Öklid — `d = √Σ(xᵢ−xⱼ)²`
+ 
+**Ölçeklendirme ZORUNLU:** rpm≈1538 ile hammadde≈45 TL aynı formüle girerse rpm mesafeyi 34× baskılar.  
+StandardScaler: `z = (x−μ)/σ` → her değişken μ=0, σ=1
+ 
+**K=1** → Overfitting | **K büyük** → Underfitting
+        """)
+ 
+    with a3:
+        st.markdown("""
+**Paradigma:** Eager Learning — Marjin Tabanlı (Geometrik)
+ 
+Sınıflar arasındaki **maksimum marjini** bulan hiper düzlem öğrenir.  
+Marjini belirleyen noktalara **Support Vectors** denir.
+ 
+- **C parametresi:** Küçük C = geniş marjin + hata toleransı | Büyük C = dar marjin + sıfır hata isteği
+- **RBF Kernel:** `K(x,y) = exp(−γ||x−y||²)` — doğrusal olmayan sınırları modeleller
+- **SVR (Regresyon):** ε-duyarsız tüp — tüp içindeki hatalar cezalandırılmaz
+ 
+**Ölçeklendirme ZORUNLU:** Marjin hesabı mesafeye dayalıdır — KNN ile aynı gerekçe.
+ 
+**C küçük** → Underfitting | **C büyük** → Overfitting
+        """)
+ 
+    st.divider()
+    st.markdown("#### Hangi durumda hangi algoritma?")
+    st.dataframe(pd.DataFrame({
+        "Kriter":  ["Yorumlanabilirlik şart","Gerçek zamanlı tahmin","Büyük veri (>100K)","Az veri","Doğrusal olmayan ilişki"],
+        "Öneri":   ["🌳 Decision Tree","🌳 DT veya 🟣 SVM","🌳 DT veya 🟣 SVM","🟣 SVM","🟣 SVM (kernel) veya 🌳 DT"],
+    }), hide_index=True, use_container_width=True)

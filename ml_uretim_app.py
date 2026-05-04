@@ -28,7 +28,8 @@ def uretim_verisi():
     is_ = np.round(np.random.uniform(4, 16, n), 1)
     hm  = np.round(np.random.uniform(10, 80, n), 1)
     vr  = np.random.choice([1, 2], n)
-    mal = ur*hm*0.9 + is_*250 + mk*150 + (vr==2)*1200 + np.random.normal(0,500,n)
+    vardiya_carpan = np.where(vr==2, 1.25, 1.0)
+    mal = (ur*hm*0.9 + is_*300 + mk*150) * vardiya_carpan + np.random.normal(0,500,n)
     return pd.DataFrame({"uretim_miktari":ur,"makine_yasi":mk,"iscilik_saati":is_,
                           "hammadde_fiyati":hm,"vardiya":vr,"toplam_maliyet":np.round(mal,0)})
  
@@ -232,8 +233,8 @@ with t1:
         c1,c2 = st.columns(2)
         c1.metric("Toplam Maliyet", f"{tahmin:,.0f} TL")
         c2.metric("Birim Maliyet",  f"{tahmin/r_ur:,.0f} TL/adet")
-        if tahmin > 25000:   st.error("⚠️ Yüksek maliyet")
-        elif tahmin > 15000: st.warning("🟡 Orta maliyet")
+        if tahmin > 32000:   st.error("⚠️ Yüksek maliyet")
+        elif tahmin > 20000: st.warning("🟡 Orta maliyet")
         else:                st.success("✅ Normal maliyet")
         st.info(f"🌳 DT: **{t_dt:,.0f} TL** | 🔵 KNN: **{t_knn:,.0f} TL** | 🟣 SVM: **{t_svm:,.0f} TL**")
         st.divider()
@@ -280,8 +281,10 @@ with t2:
     col_p2, col_r2 = st.columns([1,2])
     with col_p2:
         st.markdown("#### ⚙️ Sensör Değerleri")
-        c_air  = st.slider("🌡️ Hava Sıcaklığı (K)", 295.0, 305.0, 300.0, step=0.1)
-        c_proc = st.slider("🔥 İşlem Sıcaklığı (K)", 305.0, 315.0, 310.0, step=0.1)
+        c_air_c  = st.slider("🌡️ Hava Sıcaklığı (°C)", 22.0, 32.0, 27.0, step=0.1)
+        c_proc_c = st.slider("🔥 İşlem Sıcaklığı (°C)", 32.0, 42.0, 37.0, step=0.1)
+        c_air  = c_air_c  + 273.15
+        c_proc = c_proc_c + 273.15
         c_rpm  = st.slider("⚙️ Dönüş Hızı (rpm)", 1168, 2886, 1538)
         c_tork = st.slider("🔩 Tork (Nm)", 4.0, 77.0, 40.0, step=0.5)
         c_wear = st.slider("🔧 Takım Aşınması (dk)", 0, 250, 100)
@@ -543,4 +546,3 @@ Sınıflar arasındaki **maksimum marjini** bulan hiper düzlem.
         "Kriter":  ["Yorumlanabilirlik şart","Gerçek zamanlı tahmin","Büyük veri","Az veri","Doğrusal olmayan"],
         "Öneri":   ["🌳 DT","🌳 DT veya 🟣 SVM","🌳 DT veya 🟣 SVM","🟣 SVM","🟣 SVM (RBF)"],
     }), hide_index=True, use_container_width=True)
- 

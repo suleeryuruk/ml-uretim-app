@@ -14,7 +14,7 @@ from sklearn.metrics import (r2_score, mean_absolute_error, mean_squared_error,
                               accuracy_score, precision_score, recall_score,
                               f1_score, confusion_matrix)
 
-st.set_page_config(page_title="Üretim Zekâ Platformu", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Üretim Zekâ Platformu", page_icon="", layout="wide")
 
 # ─────────────────────────────────────────────
 # VERİ FONKSİYONLARI
@@ -147,16 +147,16 @@ kaynak = st.session_state.get("ai4i_kaynak", "sentetik")
 # ─────────────────────────────────────────────
 # BAŞLIK
 # ─────────────────────────────────────────────
-st.title("🏭 Üretim Zekâ Platformu")
+st.title(" Üretim Zekâ Platformu")
 st.markdown("**Decision Tree · KNN · SVM** — Üretim Maliyeti Tahmini & Makine Arızası Tespiti")
 
 if kaynak == "uci":
-    st.success("✅ AI4I 2020 gerçek verisi yüklendi (UCI) — 10.000 gözlem")
+    st.success(" AI4I 2020 gerçek verisi yüklendi (UCI) — 10.000 gözlem")
 elif kaynak == "yuklendi":
-    st.success("✅ AI4I 2020 verisi yüklendi (CSV)")
+    st.success(" AI4I 2020 verisi yüklendi (CSV)")
 else:
-    st.warning("⚠️ AI4I verisi indirilemedi — demo mod (sentetik veri)")
-    with st.expander("📂 ai4i2020.csv yükle"):
+    st.warning("️ AI4I verisi indirilemedi — demo mod (sentetik veri)")
+    with st.expander(" ai4i2020.csv yükle"):
         st.markdown("Veriyi [UCI](https://archive.ics.uci.edu/dataset/601) sayfasından indirip buraya yükleyebilirsiniz.")
         yuklenen = st.file_uploader("ai4i2020.csv", type=["csv"])
         if yuklenen:
@@ -193,32 +193,32 @@ yte_c = np.array(yte_c_lst)
 # SEKMELER
 # ─────────────────────────────────────────────
 t1,t2,t3,t4,t5 = st.tabs([
-    "📈 Maliyet Tahmini",
-    "🔴 Arıza Tahmini",
+    " Maliyet Tahmini",
+    " Arıza Tahmini",
     "🆚 Model Karşılaştırma",
-    "🔍 Hiperparametre Analizi",
-    "📚 Algoritma Teorisi"
+    " Hiperparametre Analizi",
+    " Algoritma Teorisi"
 ])
 
 # ═══════════════════════════════════════════════════
 # SEKME 1 — MALİYET TAHMİNİ
 # ═══════════════════════════════════════════════════
 with t1:
-    st.markdown("### 📈 Üretim Maliyeti Tahmini")
+    st.markdown("###  Üretim Maliyeti Tahmini")
     st.markdown("Parametreleri ayarlayın — tahmin **anında** güncellenir.")
     st.divider()
 
     col_p, col_r = st.columns([1,2])
     with col_p:
-        st.markdown("#### ⚙️ Parametreler")
-        r_ur  = st.slider("📦 Üretim Miktarı (adet)", 50, 500, 250)
-        r_mk  = st.slider("🔧 Makine Yaşı (yıl)", 1, 20, 8)
-        r_is  = st.slider("👷 İşçilik Saati", 4.0, 16.0, 10.0, step=0.5)
-        r_hm  = st.slider("🪨 Hammadde Fiyatı (TL/birim)", 10, 80, 45)
-        r_vrd = st.radio("🌙 Vardiya", ["Gündüz","Gece"])
+        st.markdown("#### ️ Parametreler")
+        r_ur  = st.slider(" Üretim Miktarı (adet)", 50, 500, 250)
+        r_mk  = st.slider(" Makine Yaşı (yıl)", 1, 20, 8)
+        r_is  = st.slider(" İşçilik Saati", 4.0, 16.0, 10.0, step=0.5)
+        r_hm  = st.slider(" Hammadde Fiyatı (TL/birim)", 10, 80, 45)
+        r_vrd = st.radio(" Vardiya", ["Gündüz","Gece"])
         r_vval = 1 if r_vrd=="Gündüz" else 2
         st.divider()
-        model_r = st.radio("🤖 Model", ["Decision Tree","KNN","SVM"], horizontal=True)
+        model_r = st.radio(" Model", ["Decision Tree","KNN","SVM"], horizontal=True)
 
     with col_r:
         girdi   = pd.DataFrame([{"uretim_miktari":r_ur,"makine_yasi":r_mk,
@@ -229,18 +229,18 @@ with t1:
         t_svm = float(r_mdl["svm"].predict(girdi_s)[0])
         tahmin = {"Decision Tree":t_dt,"KNN":t_knn,"SVM":t_svm}[model_r]
 
-        st.markdown(f"#### 💰 Tahmin — {model_r}")
+        st.markdown(f"####  Tahmin — {model_r}")
         c1,c2 = st.columns(2)
         c1.metric("Toplam Maliyet", f"{tahmin:,.0f} TL")
         c2.metric("Birim Maliyet",  f"{tahmin/r_ur:,.0f} TL/adet")
-        if tahmin > 32000:   st.error("⚠️ Yüksek maliyet")
-        elif tahmin > 20000: st.warning("🟡 Orta maliyet")
-        else:                st.success("✅ Normal maliyet")
-        st.info(f"🌳 DT: **{t_dt:,.0f} TL** | 🔵 KNN: **{t_knn:,.0f} TL** | 🟣 SVM: **{t_svm:,.0f} TL**")
+        if tahmin > 32000:   st.error("️ Yüksek maliyet")
+        elif tahmin > 20000: st.warning(" Orta maliyet")
+        else:                st.success(" Normal maliyet")
+        st.info(f" DT: **{t_dt:,.0f} TL** |  KNN: **{t_knn:,.0f} TL** |  SVM: **{t_svm:,.0f} TL**")
         st.divider()
-        st.markdown("#### 📊 Test Seti Performansı")
+        st.markdown("####  Test Seti Performansı")
         st.dataframe(pd.DataFrame({
-            "Model": ["🌳 Decision Tree","🔵 KNN","🟣 SVM"],
+            "Model": [" Decision Tree"," KNN"," SVM"],
             "R²":    [r_met["dt"]["r2"],r_met["knn"]["r2"],r_met["svm"]["r2"]],
             "MAE":   [f"{r_met['dt']['mae']:,.0f} TL",f"{r_met['knn']['mae']:,.0f} TL",f"{r_met['svm']['mae']:,.0f} TL"],
             "RMSE":  [f"{r_met['dt']['rmse']:,.0f} TL",f"{r_met['knn']['rmse']:,.0f} TL",f"{r_met['svm']['rmse']:,.0f} TL"],
@@ -271,7 +271,7 @@ with t1:
         plt.tight_layout(); st.pyplot(fig2)
 
     st.divider()
-    with st.expander("🌳 Karar Ağacı Görselleştirmesi — Regresyon"):
+    with st.expander(" Karar Ağacı Görselleştirmesi — Regresyon"):
         derinlik_r = st.slider("Gösterilecek derinlik", 1, 5, 3, key="dt_dep_r")
         fig_tr, ax_tr = plt.subplots(figsize=(20, 8))
         plot_tree(r_mdl["dt"], max_depth=derinlik_r,
@@ -281,7 +281,7 @@ with t1:
         plt.tight_layout(); st.pyplot(fig_tr)
         st.caption("Her kutu: bölme kuralı | MSE değeri | örnek sayısı | ortalama maliyet (TL)")
 
-    with st.expander("🌳 Karar Ağacı Görselleştirmesi — Sınıflandırma"):
+    with st.expander(" Karar Ağacı Görselleştirmesi — Sınıflandırma"):
         derinlik_c = st.slider("Gösterilecek derinlik", 1, 5, 3, key="dt_dep_c")
         fig_tc, ax_tc = plt.subplots(figsize=(20, 8))
         plot_tree(c_mdl["dt"], max_depth=derinlik_c,
@@ -297,23 +297,23 @@ with t1:
 # ═══════════════════════════════════════════════════
 with t2:
     kaynak_lbl = {"uci":"AI4I 2020 (UCI)","yuklendi":"Yüklenen CSV","sentetik":"Demo — Sentetik"}
-    st.markdown(f"### 🔴 Makine Arızası Tahmini — {kaynak_lbl.get(kaynak)}")
+    st.markdown(f"###  Makine Arızası Tahmini — {kaynak_lbl.get(kaynak)}")
     st.divider()
 
     col_p2, col_r2 = st.columns([1,2])
     with col_p2:
-        st.markdown("#### ⚙️ Sensör Değerleri")
-        c_air_c  = st.slider("🌡️ Hava Sıcaklığı (°C)", 22.0, 32.0, 27.0, step=0.1)
-        c_proc_c = st.slider("🔥 İşlem Sıcaklığı (°C)", 32.0, 42.0, 37.0, step=0.1)
+        st.markdown("#### ️ Sensör Değerleri")
+        c_air_c  = st.slider("️ Hava Sıcaklığı (°C)", 22.0, 32.0, 27.0, step=0.1)
+        c_proc_c = st.slider(" İşlem Sıcaklığı (°C)", 32.0, 42.0, 37.0, step=0.1)
         c_air  = c_air_c  + 273.15
         c_proc = c_proc_c + 273.15
-        c_rpm  = st.slider("⚙️ Dönüş Hızı (rpm)", 1168, 2886, 1538)
-        c_tork = st.slider("🔩 Tork (Nm)", 4.0, 77.0, 40.0, step=0.5)
-        c_wear = st.slider("🔧 Takım Aşınması (dk)", 0, 250, 100)
-        c_tip  = st.selectbox("🏷️ Ürün Tipi", ["L — Düşük","M — Orta","H — Yüksek"])
+        c_rpm  = st.slider("️ Dönüş Hızı (rpm)", 1168, 2886, 1538)
+        c_tork = st.slider(" Tork (Nm)", 4.0, 77.0, 40.0, step=0.5)
+        c_wear = st.slider(" Takım Aşınması (dk)", 0, 250, 100)
+        c_tip  = st.selectbox("️ Ürün Tipi", ["L — Düşük","M — Orta","H — Yüksek"])
         c_te   = {"L — Düşük":0,"M — Orta":1,"H — Yüksek":2}[c_tip]
         st.divider()
-        model_c = st.radio("🤖 Model", ["Decision Tree","KNN","SVM"], horizontal=True, key="mc")
+        model_c = st.radio(" Model", ["Decision Tree","KNN","SVM"], horizontal=True, key="mc")
 
     with col_r2:
         vals    = {"type_encoded":c_te,"air_temperature_k":c_air,
@@ -331,22 +331,22 @@ with t2:
         aktif_key = {"Decision Tree":"dt","KNN":"knn","SVM":"svm"}[model_c]
         aktif = res[aktif_key]
 
-        st.markdown(f"#### 🎯 Tahmin — {model_c}")
+        st.markdown(f"####  Tahmin — {model_c}")
         if aktif["pred"]==1:
-            st.error(f"🔴 **ARIZA RİSKİ YÜKSEK** — Olasılık: %{aktif['prob']*100:.1f}")
+            st.error(f" **ARIZA RİSKİ YÜKSEK** — Olasılık: %{aktif['prob']*100:.1f}")
         else:
-            st.success(f"✅ **NORMAL ÇALIŞMA** — Arıza olasılığı: %{aktif['prob']*100:.1f}")
+            st.success(f" **NORMAL ÇALIŞMA** — Arıza olasılığı: %{aktif['prob']*100:.1f}")
         st.progress(float(aktif["prob"]))
 
-        def lbl(r): return "🔴 ARIZA" if r["pred"]==1 else "✅ Normal"
-        st.info(f"🌳 DT: **{lbl(res['dt'])}** (%{res['dt']['prob']*100:.1f})  |  "
-                f"🔵 KNN: **{lbl(res['knn'])}** (%{res['knn']['prob']*100:.1f})  |  "
-                f"🟣 SVM: **{lbl(res['svm'])}** (%{res['svm']['prob']*100:.1f})")
+        def lbl(r): return " ARIZA" if r["pred"]==1 else " Normal"
+        st.info(f" DT: **{lbl(res['dt'])}** (%{res['dt']['prob']*100:.1f})  |  "
+                f" KNN: **{lbl(res['knn'])}** (%{res['knn']['prob']*100:.1f})  |  "
+                f" SVM: **{lbl(res['svm'])}** (%{res['svm']['prob']*100:.1f})")
 
         st.divider()
-        st.markdown("#### 📊 Test Seti Performansı")
+        st.markdown("####  Test Seti Performansı")
         st.dataframe(pd.DataFrame({
-            "Model":    ["🌳 DT","🔵 KNN","🟣 SVM"],
+            "Model":    [" DT"," KNN"," SVM"],
             "Accuracy": [f"%{c_met['dt']['acc']}",f"%{c_met['knn']['acc']}",f"%{c_met['svm']['acc']}"],
             "Recall ⭐":[f"%{c_met['dt']['rec']}",f"%{c_met['knn']['rec']}",f"%{c_met['svm']['rec']}"],
             "Precision":[f"%{c_met['dt']['prec']}",f"%{c_met['knn']['prec']}",f"%{c_met['svm']['prec']}"],
@@ -384,41 +384,41 @@ with t3:
     st.markdown("#### Regresyon")
     st.dataframe(pd.DataFrame({
         "Metrik":          ["R²","MAE (TL)","RMSE (TL)","Ölçeklendirme","Özellik Önemi"],
-        "🌳 Decision Tree":[r_met["dt"]["r2"],f"{r_met['dt']['mae']:,.0f}",f"{r_met['dt']['rmse']:,.0f}","❌ Gerekmez","✅ Var"],
-        "🔵 KNN":          [r_met["knn"]["r2"],f"{r_met['knn']['mae']:,.0f}",f"{r_met['knn']['rmse']:,.0f}","✅ Scaler","❌ Yok"],
-        "🟣 SVM":          [r_met["svm"]["r2"],f"{r_met['svm']['mae']:,.0f}",f"{r_met['svm']['rmse']:,.0f}","✅ Scaler","❌ Yok"],
+        " Decision Tree":[r_met["dt"]["r2"],f"{r_met['dt']['mae']:,.0f}",f"{r_met['dt']['rmse']:,.0f}"," Gerekmez"," Var"],
+        " KNN":          [r_met["knn"]["r2"],f"{r_met['knn']['mae']:,.0f}",f"{r_met['knn']['rmse']:,.0f}"," Scaler"," Yok"],
+        " SVM":          [r_met["svm"]["r2"],f"{r_met['svm']['mae']:,.0f}",f"{r_met['svm']['rmse']:,.0f}"," Scaler"," Yok"],
     }), hide_index=True, use_container_width=True)
 
     vals_r2 = [r_met["dt"]["r2"],r_met["knn"]["r2"],r_met["svm"]["r2"]]
     best_r2 = max(vals_r2)
-    st.success(f"🏆 En yüksek R²: **{['Decision Tree','KNN','SVM'][vals_r2.index(best_r2)]}** ({best_r2})")
+    st.success(f" En yüksek R²: **{['Decision Tree','KNN','SVM'][vals_r2.index(best_r2)]}** ({best_r2})")
 
     st.divider()
     st.markdown("#### Sınıflandırma")
     st.dataframe(pd.DataFrame({
         "Metrik":          ["Accuracy","Recall ⭐","Precision","F1"],
-        "🌳 Decision Tree":[f"%{c_met['dt']['acc']}",f"%{c_met['dt']['rec']}",f"%{c_met['dt']['prec']}",f"%{c_met['dt']['f1']}"],
-        "🔵 KNN":          [f"%{c_met['knn']['acc']}",f"%{c_met['knn']['rec']}",f"%{c_met['knn']['prec']}",f"%{c_met['knn']['f1']}"],
-        "🟣 SVM":          [f"%{c_met['svm']['acc']}",f"%{c_met['svm']['rec']}",f"%{c_met['svm']['prec']}",f"%{c_met['svm']['f1']}"],
+        " Decision Tree":[f"%{c_met['dt']['acc']}",f"%{c_met['dt']['rec']}",f"%{c_met['dt']['prec']}",f"%{c_met['dt']['f1']}"],
+        " KNN":          [f"%{c_met['knn']['acc']}",f"%{c_met['knn']['rec']}",f"%{c_met['knn']['prec']}",f"%{c_met['knn']['f1']}"],
+        " SVM":          [f"%{c_met['svm']['acc']}",f"%{c_met['svm']['rec']}",f"%{c_met['svm']['prec']}",f"%{c_met['svm']['f1']}"],
     }), hide_index=True, use_container_width=True)
 
     vals_rec = [c_met["dt"]["rec"],c_met["knn"]["rec"],c_met["svm"]["rec"]]
     best_rec = max(vals_rec)
-    st.success(f"🏆 En yüksek Recall: **{['Decision Tree','KNN','SVM'][vals_rec.index(best_rec)]}** (%{best_rec})")
+    st.success(f" En yüksek Recall: **{['Decision Tree','KNN','SVM'][vals_rec.index(best_rec)]}** (%{best_rec})")
 
     st.divider()
     st.dataframe(pd.DataFrame({
         "Özellik":    ["Paradigma","Eğitim","Tahmin Hızı","Ölçeklendirme","Yorumlanabilirlik","Hiperparametre"],
-        "🌳 DT":      ["Eager/Kural","Ağaç öğrenir","⚡ O(log n)","❌ Gerekmez","⭐⭐⭐","max_depth"],
-        "🔵 KNN":     ["Lazy/Örnek","Veriyi saklar","🐢 O(n·d)","✅ Zorunlu","⭐","K"],
-        "🟣 SVM":     ["Eager/Marjin","SV bulur","⚡ O(sv·d)","✅ Zorunlu","⭐","C, kernel"],
+        " DT":      ["Eager/Kural","Ağaç öğrenir"," O(log n)"," Gerekmez","⭐⭐⭐","max_depth"],
+        " KNN":     ["Lazy/Örnek","Veriyi saklar"," O(n·d)"," Zorunlu","⭐","K"],
+        " SVM":     ["Eager/Marjin","SV bulur"," O(sv·d)"," Zorunlu","⭐","C, kernel"],
     }), hide_index=True, use_container_width=True)
 
 # ═══════════════════════════════════════════════════
 # SEKME 4 — HİPERPARAMETRE
 # ═══════════════════════════════════════════════════
 with t4:
-    st.markdown("### 🔍 Hiperparametre Optimizasyon Analizi")
+    st.markdown("###  Hiperparametre Optimizasyon Analizi")
     st.divider()
     hp = st.radio("Analiz:", ["KNN — K Optimizasyonu","SVM — C Optimizasyonu"], horizontal=True)
 
@@ -515,18 +515,18 @@ with t4:
     st.divider()
     st.dataframe(pd.DataFrame({
         "Durum":   ["Overfitting","Underfitting","Optimal"],
-        "🌳 DT":   ["max_depth büyük","max_depth küçük","Test kaybı minimum"],
-        "🔵 KNN":  ["K=1","K çok büyük","Test R²/Acc maksimum"],
-        "🟣 SVM":  ["C çok büyük","C çok küçük","Test performansı maksimum"],
+        " DT":   ["max_depth büyük","max_depth küçük","Test kaybı minimum"],
+        " KNN":  ["K=1","K çok büyük","Test R²/Acc maksimum"],
+        " SVM":  ["C çok büyük","C çok küçük","Test performansı maksimum"],
     }), hide_index=True, use_container_width=True)
 
 # ═══════════════════════════════════════════════════
 # SEKME 5 — TEORİ
 # ═══════════════════════════════════════════════════
 with t5:
-    st.markdown("### 📚 Algoritma Teorisi")
+    st.markdown("###  Algoritma Teorisi")
     st.divider()
-    a1,a2,a3 = st.tabs(["🌳 Decision Tree","🔵 KNN","🟣 SVM"])
+    a1,a2,a3 = st.tabs([" Decision Tree"," KNN"," SVM"])
     with a1:
         st.markdown("""
 **Eager Learning — Kural Tabanlı**
@@ -566,5 +566,5 @@ Sınıflar arasındaki **maksimum marjini** bulan hiper düzlem.
     st.divider()
     st.dataframe(pd.DataFrame({
         "Kriter":  ["Yorumlanabilirlik şart","Gerçek zamanlı tahmin","Büyük veri","Az veri","Doğrusal olmayan"],
-        "Öneri":   ["🌳 DT","🌳 DT veya 🟣 SVM","🌳 DT veya 🟣 SVM","🟣 SVM","🟣 SVM (RBF)"],
+        "Öneri":   [" DT"," DT veya  SVM"," DT veya  SVM"," SVM"," SVM (RBF)"],
     }), hide_index=True, use_container_width=True)

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import warnings, os, io
 warnings.filterwarnings("ignore")
 
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tree, export_text
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
 from sklearn.svm import SVR, SVC
 from sklearn.model_selection import train_test_split
@@ -269,6 +269,28 @@ with t1:
             ax2.text(v+0.003,i,f"{v:.3f}",va="center",fontsize=9)
         ax2.set_title("Özellik Önemi — Decision Tree"); ax2.set_xlabel("Önem")
         plt.tight_layout(); st.pyplot(fig2)
+
+    st.divider()
+    with st.expander("🌳 Karar Ağacı Görselleştirmesi — Regresyon"):
+        derinlik_r = st.slider("Gösterilecek derinlik", 1, 5, 3, key="dt_dep_r")
+        fig_tr, ax_tr = plt.subplots(figsize=(20, 8))
+        plot_tree(r_mdl["dt"], max_depth=derinlik_r,
+                  feature_names=["Üretim","Makine Yaşı","İşçilik","Hammadde","Vardiya"],
+                  filled=True, rounded=True, fontsize=9, ax=ax_tr)
+        ax_tr.set_title(f"Decision Tree Regresyon — İlk {derinlik_r} Derinlik", fontsize=12, fontweight="bold")
+        plt.tight_layout(); st.pyplot(fig_tr)
+        st.caption("Her kutu: bölme kuralı | MSE değeri | örnek sayısı | ortalama maliyet (TL)")
+
+    with st.expander("🌳 Karar Ağacı Görselleştirmesi — Sınıflandırma"):
+        derinlik_c = st.slider("Gösterilecek derinlik", 1, 5, 3, key="dt_dep_c")
+        fig_tc, ax_tc = plt.subplots(figsize=(20, 8))
+        plot_tree(c_mdl["dt"], max_depth=derinlik_c,
+                  feature_names=c_feat,
+                  class_names=["Normal","Arıza"],
+                  filled=True, rounded=True, fontsize=9, ax=ax_tc)
+        ax_tc.set_title(f"Decision Tree Sınıflandırma — İlk {derinlik_c} Derinlik", fontsize=12, fontweight="bold")
+        plt.tight_layout(); st.pyplot(fig_tc)
+        st.caption("Mavi → Normal, Turuncu → Arıza. Renk koyulaştıkça o sınıf daha baskın.")
 
 # ═══════════════════════════════════════════════════
 # SEKME 2 — ARIZA TAHMİNİ
